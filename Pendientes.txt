@@ -1,0 +1,10 @@
+1- Agregar variables de entorno para pasar los host y ports.
+3- RECOVER ID / SAVEDLGID
+7- Remote VARS
+8- Ver que headers manda el modem con POST
+9- Process
+10- Documentar uso y nombres en REDIS
+11- Testing
+12- Pasar a Docker
+13- Docker Testing
+

@@ -1,0 +1,73 @@
+1- Crear un entorno virtual:
+python3 -m venv venv
+
+2- Activarlo:
+source venv/bin/activate
+
+3- Actualizar pip
+pip install --upgrade pip
+
+4- Instalar paquetes:
+flask, flask-restful, gunicorn, redis
+
+5- Para ver que paquetes estan instalados y con que versiones:
+pip freeze > Requirements.txt
+
+Deploy la aplicacion:
+https://www.rosehosting.com/blog/how-to-deploy-flask-application-with-nginx-and-gunicorn-on-ubuntu-20-04/
+
+A) La aplicacion flask se debe correr con la linea:
+ app.run(host='0.0.0.0')
+
+B) Creamos un entrypoint WGSI para gunicorn.
+    Creamos en el directorio de la aplicacion un archivo wgsi.py con el contenido:
+    
+from flaskapp import app
+if __name__ == "__main__":
+    app.run()
+
+
+Con el entorno virtual activado, lo probamos corriendo: 
+gunicorn --bind 0.0.0.0:5000 wsgi:app
+
+Si todo anda bien, pasamos a crear un servicio flask en Systemd.
+
+C) Creamos un archivo en Systemd para la aplicacion flask:
+
+vim /etc/systemd/system/flask.service
+
+[Unit]
+Description=Gunicorn instance to serve Flask
+After=network.target
+[Service]
+User=root
+Group=www-data
+WorkingDirectory=/home/pablo/Spymovil/python/proyectos/COMMSV3/apiredis
+Environment="PATH=/home/pablo/Spymovil/python/proyectos/COMMSV3/venv/bin"
+ExecStart=/home/pablo/Spymovil/python/proyectos/COMMSV3/venv/bin/gunicorn --bind 0.0.0.0:5000 wsgi:app
+[Install]
+WantedBy=multi-user.target
+
+
+systemctl daemon-reload
+systemctl start flask
+systemctl enable flask
+systemctl status flask
+
+D) Configuramos nginx como proxy reverso para flask.
+
+Creamos un archivo:
+vim /etc/nginx/conf.d/flask.conf
+
+server {
+    listen 80;
+    server_name flask.example.com;
+    location / {
+        include proxy_params;
+        proxy_pass  http://127.0.0.1:5000;
+    }
+}
+
+Reiniciamos el servicio:
+systemctl start nginx
+
