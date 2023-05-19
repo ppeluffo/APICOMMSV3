@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/COMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
 '''
 Primera version de una API para interactuar con la BD Redis
 Todas las respuestas son json.
@@ -86,6 +86,7 @@ class Configuracion(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if pdict is None:
+            app.logger.info( f'Configuracion/get: NO config rcd, code 204')
             return {},204   # NO CONTENT
         #
         # En la redis la configuracion es un dict serializado.
@@ -146,6 +147,7 @@ class ConfiguracionDebug(Resource):
             return {'Err': f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if debug_id is None:
+            app.logger.info( f'ConfiguracionDebug/get: NO debug_unit rcd, code 204')
             return {},204   # NO CONTENT
         #
         return debug_id.decode(), 200
@@ -171,6 +173,7 @@ class Ordenes(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if ordenes is None:
+            app.logger.info( f'Ordenes/get: NO ordenes rcd, code 204')
             return {},204   # NO CONTENT
         #
         return ordenes.decode(), 200
@@ -218,6 +221,7 @@ class OrdenesPkatvise(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if pk_atvise is None:
+            app.logger.info( f'OrdenesPkatvise/get: NO pkatvise ordenes rcd, code 204')
             return {},204   # NO CONTENT
         #
         orders_atvise = pickle.loads(pk_atvise)
@@ -263,6 +267,7 @@ class DataLine(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if pdict is None:
+            app.logger.info( f'DataLine/get: NO dataline rcd, code 204')
             return {},204   # NO CONTENT
         #
         # En la redis la configuracion es un dict serializado.
@@ -326,6 +331,7 @@ class QueueLength(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if qlength is None:
+            app.logger.info( f'QueueLength/get: NO qlength rcd, code 204')
             return {},204   # NO CONTENT
         #
         return {'qname': args['qnames'], 'length': qlength.decode()}, 200
@@ -349,6 +355,7 @@ class QueueItems(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{REDIS_HOST}'}, 500
         #
         if l_pkdatos is None:
+            app.logger.info( f'QueueItems/get: NO l_pkdatos rcd, code 204')
             return {},204   # NO CONTENT
         #
         l_datos = []

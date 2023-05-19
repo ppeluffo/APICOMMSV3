@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/COMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
 '''
 Funciones donde implemento los objetos Memblocks.
 
@@ -12,19 +12,20 @@ b=pack('ififf',14,123.4,100,3.14,2.7)
 b'\x0e\x00\x00\x00\xcd\xcc\xf6Bd\x00\x00\x00\xc3\xf5H@\xcd\xcc,@'
 b'\n\x0bf\xe6\xf6Bb\x04W\x02\xecq\xe4C:\x16\x00\x00\x00\x00\x00\x0b\xa3'}
 
-MEMBLOCK = {'RCVD_MBK_DEF': [
+{ 'MEMBLOCK':{'RCVD_MBK_DEF': [
                               ['UPA1_CAUDALIMETRO', 'float', 0],['UPA1_STATE1', 'uchar', 1],['UPA1_POS_ACTUAL_6', 'short', 8],
                               ['UPA2_CAUDALIMETRO', 'float', 0],['BMB_STATE18', 'uchar', 1],['BMB_STATE19', 'uchar', 1]
                             ],
              'SEND_MBK_DEF': [
                               ['UPA1_ORDER_1', 'short', 1],['UPA1_CONSIGNA_6', 'short', 2560],['ESP_ORDER_8', 'short', 200],
-                              ['NIVEL_TQ_KIYU', 'float', 2560]
+                              ['ALTURA_TANQUE_KIYU_1', 'float', 2560],['ALTURA_TANQUE_KIYU_2', 'float', 2560],
+                              ['PRESION_ALTA_SJ1', 'float', 0],['PRESION_BAJA_SQ1', 'float', 0]
                             ],
              'RCVD_MBK_LENGTH':15,
-             'SEND_MBK_LENGTH':10
-            }
+             'SEND_MBK_LENGTH':24
+            },
 
-REMVARS: {
+'REMVARS':{
         'KIYU001': [
             ('HTQ1', 'ALTURA_TANQUE_KIYU_1'), 
             ('HTQ2', 'ALTURA_TANQUE_KIYU_2')
@@ -34,6 +35,7 @@ REMVARS: {
             ('PB', 'PRESION_BAJA_SQ1')
             ]
         }
+}
 
 RCVD_MBK_LENGTH y SEND_MBK_LENGTH incluyen los 2 bytes del CRC.!!!
 En este caso el len('RCVD_MBK_DEF') es 13 
@@ -132,12 +134,12 @@ class Memblock:
         '''
         # 1) El CRC debe ser correcto
         if not self.__check_payload_crc_valid__():
-            self.app.logger.error('ID={self.plcid}, FUNC=convert_bytes2dict, MBK_CRC_ERROR' )
+            self.app.logger.error('ID={self.plcid}, FUNC=convert_bytes2dict, ERROR: MBK_CRC_ERR' )
             return False
 
         # 2) El payload debe tener largo para ser decodificado de acuerdo al memblock def.
         if self.rx_payload_length < self.rcvd_mbk_length:
-            self.app.logger.error( f'ID={self.plcid}, FUNC=convert_bytes2dict, MBK_RCVD_LENGTH_ERROR: payload_length={self.rx_payload_length}, mbk_length={self.rcvd_mbk_length}' )
+            self.app.logger.error( f'ID={self.plcid}, FUNC=convert_bytes2dict, ERROR: MBK_RCVD_LENGTH_ERR: payload_length={self.rx_payload_length}, mbk_length={self.rcvd_mbk_length}' )
             return False
         #
         # 3) Calculo los componentes del memblock de recepcion (formato,largo, lista de nombres)
@@ -151,7 +153,7 @@ class Memblock:
         try:
             t_vals = unpack_from(sformat, self.rx_payload)
         except ValueError as err:
-            self.app.logger.error( f'ID={self.plcid}, FUNC=convert_bytes2dict, NO PUEDO UNPACK !! sformat={sformat}, rx_payload=[{self.rx_payload}], error={err}' )
+            self.app.logger.error( f'ID={self.plcid}, FUNC=convert_bytes2dict, ERROR: NO PUEDO UNPACK !! sformat={sformat}, rx_payload=[{self.rx_payload}], error={err}' )
             return False
         #
         # 5) Genero una namedtuple con los valores anteriores y los nombres de las variables
@@ -160,7 +162,7 @@ class Memblock:
         try:
             rx_tuple = t_names._make(t_vals)
         except ValueError:
-            self.app.logger.error( 'ID={self.plcid}, FUNC=convert_bytes2dict, NO PUEDO GENERAR LA TUPLA DE LOS VALORES.!!' )
+            self.app.logger.error( 'ID={self.plcid}, FUNC=convert_bytes2dict, ERROR:NO PUEDO GENERAR LA TUPLA DE LOS VALORES.!!' )
             return False
         #
         # La convierto a diccionario

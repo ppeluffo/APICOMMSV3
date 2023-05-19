@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/COMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
 '''
 Clase especializada en utilidades de frames de dataloggers version SPXR3
 '''
@@ -66,51 +66,39 @@ class dlgutils:
         #
         hash_str = f'[TIMERPOLL:{timerpoll:03d}]'
         xhash = self.u_hash(xhash, hash_str)
-        #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-        #        'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-        #log2(d_log)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
         hash_str = f'[TIMERDIAL:{timerdial:03d}]'
         xhash = self.u_hash(xhash, hash_str)
-        #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-        #        'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-        #log2(d_log)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
         hash_str = f'[PWRMODO:{pwr_modo}]'
         xhash = self.u_hash(xhash, hash_str)
-        #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-        #        'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-        #log2(d_log)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
         hash_str = f'[PWRON:{pwr_hhmm_on:04}]'
         xhash = self.u_hash(xhash, hash_str)
-        #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-        #        'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-        #log2(d_log)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
         hash_str = f'[PWROFF:{pwr_hhmm_off:04}]'
         xhash = self.u_hash(xhash, hash_str)
-        #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-        #        'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-        #log2(d_log)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
         # A partir de la version 105 incorporamos 'samples'y almlevel'
         int_fw_ver = self.version2int( fw_ver)
+        #print(f'DEBUG::get_hash_config_base: int_fw_ver={int_fw_ver}')
         if int_fw_ver >= 105:
             samples = int(self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
             almlevel = int(self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
             hash_str = f'[SAMPLES:{samples:02}]'
             xhash = self.u_hash(xhash, hash_str)
-            #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-            #    'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-            #log2(d_log)
+            #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
             #
             hash_str = f'[ALMLEVEL:{almlevel:02}]'
             xhash = self.u_hash(xhash, hash_str)
-            #d_log = { 'MODULE':__name__, 'FUNCTION':'calcular_hash_config_base', 'LEVEL':'ERROR',
-            #    'DLGID': d_params['DLGID'], 'MSG':f'DEBUG: HASH_BASE: hash_str=<{hash_str}>, hash={xhash}' }
-            #log2(d_log)
+            #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
+        #print(f'DEBUG::get_hash_config_base: xhash={xhash}')
         return xhash
 
     def get_response_base(self, d_conf, fw_ver):
@@ -154,18 +142,19 @@ class dlgutils:
         int_fw_ver = self.version2int( fw_ver)
         xhash = 0
         for channel in ['A0','A1','A2']:
-            name = self.d_local_conf.get('BASE',{}).get(channel,{}).get('NAME','X')
+            name = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('NAME','X')
             if name == 'X':
                 hash_str = f'[{channel}:X,4,20,0.00,10.00,0.00]'
             else:
-                imin=int( self.d_local_conf.get('BASE',{}).get(channel,{}).get('IMIN','0'))
-                imax=int( self.d_local_conf.get('BASE',{}).get(channel,{}).get('IMAX','0'))
-                mmin=float( self.d_local_conf.get('BASE',{}).get(channel,{}).get('MMIN','0'))
-                mmax=float( self.d_local_conf.get('BASE',{}).get(channel,{}).get('MMAX','0'))
-                offset=float( self.d_local_conf.get('BASE',{}).get(channel,{}).get('OFFSET','0'))
+                imin=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN','0'))
+                imax=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX','0'))
+                mmin=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN','0'))
+                mmax=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX','0'))
+                offset=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET','0'))
                 hash_str = f'[{channel}:{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
             #
             xhash = self.u_hash(xhash, hash_str)
+            #print(f'DEBUG::get_hash_config_ainputs: hash_str={hash_str}, xhash={xhash}')
         return xhash
     
     def get_response_ainputs(self, d_conf, fw_ver):

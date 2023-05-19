@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/COMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 
@@ -58,13 +58,6 @@ APISQL_HOST='192.168.0.6'
 APISQL_PORT='8086'
 
 
-def format_response(response):
-    '''
-    Necesitamos este formateo para que los dlg. puedan parsear la respuesta
-    '''
-    #return f'<html><body><h1>{response}</h1></body></html>'
-    return f'<html>{response}</html>'
-
 class PlcTest(Resource):
     '''
     Clase de pruebas de PLCs
@@ -111,6 +104,10 @@ class ApiComms(Resource):
         self.d_conf = None
         self.mbk = plcmemblocks.Memblock(app)
         self.parser = None
+        self.GET_response = ''
+        self.GET_response_status_code = 0
+        self.POST_response = ''
+        self.POST_response_status_code = 0
 
     def __read_debug_id__(self):
         '''
@@ -133,17 +130,34 @@ class ApiComms(Resource):
             self.d_conf = json.loads(r_conf.json())
             if self.unit_id == self.debug_unit_id:
                 app.logger.debug(f"ID={self.args['ID']}, REDIS D_CONF={self.d_conf}")
-            return (True,None,None)
+            return True
         else:
             app.logger.debug(f"__read_configuration__. Err=({r_conf.status_code}){r_conf.text}")
         #
         # Intento leer desde SQL
         r_conf = requests.get(f'http://{APISQL_HOST}:{APISQL_PORT}/get/config', params={'dlgid':self.args['ID']}, timeout=10 )
-        if r_conf.status_code != 200:
-            app.logger.error(f"ID={self.args['ID']}: ERROR al leer config de SQL. Err=({r_conf.status_code}){r_conf.text}")
-            rsp_error = 'CONFIG=ERROR' 
-            app.logger.error(f"ID={self.args['ID']}: RSP_ERROR=[{rsp_error}]")
-            return (False, format_response(rsp_error), 200 )
+        if r_conf.status_code == 200:
+            if r_conf.json() == {}:
+                app.logger.error(f"DLG CONFIG_ERROR: ID={self.args['ID']}, Err:No Rcd en SQL. Err=({r_conf.status_code}){r_conf.text}")
+                self.GET_response = 'CONFIG=ERROR;NO HAY REGISTRO EN BD' 
+                self.GET_response_status_code = 200
+                app.logger.error(f"ID={self.args['ID']}: RSP_ERROR=[{self.GET_response}]")
+                return False
+        #
+        elif r_conf.status_code == 204:
+            # No hay datos en la SQL tampoco: Debo salir
+            app.logger.error(f"DLG CONFIG_ERROR: ID={self.args['ID']}, Err:No Rcd en SQL. Err=({r_conf.status_code}){r_conf.text}")
+            self.GET_response = 'CONFIG=ERROR;NO HAY REGISTRO EN BD' 
+            self.GET_response_status_code = 200
+            app.logger.error(f"ID={self.args['ID']}: RSP_ERROR=[{self.GET_response}]")
+            return False
+        #
+        else:
+            app.logger.error(f"DLG CONFIG_ERROR: ID={self.args['ID']}, Err: no puedo leer SQL. Err=({r_conf.status_code}){r_conf.text}")
+            self.GET_response = 'CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            app.logger.error(f"ID={self.args['ID']}: RSP_ERROR=[{self.GET_response}]")
+            return False
         #
         # La api sql me devuelve un dict, no un json !!
         self.d_conf = r_conf.json()
@@ -151,23 +165,33 @@ class ApiComms(Resource):
         # Actualizo la redis.
         r_conf = requests.put(f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion', params={'unit':self.args['ID']}, json=json.dumps(self.d_conf), timeout=10 )
         if r_conf.status_code != 200:
-            app.logger.error(f"ID={self.args['ID']}: ERROR al actualizar SQL config en REDIS. Err=({r_conf.status_code}){r_conf.text}")
-            rsp_error = 'CONFIG=ERROR' 
-            app.logger.error("ID={self.args['ID']}: RSP_ERROR=[{rsp_error}]")
-            return (False, format_response(rsp_error), 200)
+            app.logger.error(f"DLG CONFIG_ERROR: ID={self.args['ID']}, Err: no puedo actualizar SQL config en REDIS. Err=({r_conf.status_code}){r_conf.text}")
+            self.GET_response = 'CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            app.logger.error(f"ID={self.args['ID']}: RSP_ERROR=[{self.GET_response}]")
+            return False
         #
         app.logger.warning(f"ID={self.args['ID']}, Config de SQL updated en Redis")
-        return (True,None,None)
+        return True
     
-    def __get_ping__(self):
+    def __GET_format_response__(self):
+        '''
+        Necesitamos este formateo para que los dlg. puedan parsear la respuesta
+        '''
+        #return f'<html><body><h1>{response}</h1></body></html>'
+        self.GET_response = f'<html>{self.GET_response}</html>'
+        app.logger.info(f"xmit_RSP=[{self.GET_response}]")
+
+    def __GET_ping__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=PING
-        rsp_ping = 'CLASS=PONG'
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_ping}]")
-        return rsp_ping,200
+        self.GET_response = 'CLASS=PONG'
+        self.GET_response_status_code = 200
+        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return
 
-    def __get_conf_base__(self):
+    def __GET_conf_base__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11
@@ -177,23 +201,27 @@ class ApiComms(Resource):
         #
         # Chequeo la configuracion
         if self.d_conf is None:
-            rsp_base = 'CLASS=CONF_BASE&CONFIG=ERROR' 
-            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_base}]")
-            return rsp_base, 200
+            self.GET_response = 'CLASS=CONF_BASE&CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_base(self.d_conf, self.args['VER'])
-        if bd_hash == self.args['HASH']:
-            rsp_base = 'CLASS=CONF_BASE&CONFIG=OK'
-            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_base}]")
-            return rsp_base, 200
+        #print(f"DEBUG::__get_conf_base__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_BASE&CONFIG=OK'
+            self.GET_response_status_code = 200
+            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
             
         # No coinciden: mando la nueva configuracion
-        rsp_base = self.dlgutils.get_response_base(self.d_conf, self.args['VER'])
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_base}]")
-        return rsp_base, 200
-    
-    def __get_conf_ainputs__(self):
+        self.GET_response = self.dlgutils.get_response_base(self.d_conf, self.args['VER'])
+        self.GET_response_status_code = 200
+        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return
+
+    def __GET_conf_ainputs__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_AINPUTS&HASH=0x01
@@ -202,23 +230,27 @@ class ApiComms(Resource):
         #
         # Chequeo la configuracion
         if self.d_conf is None:
-            rsp_ainputs = 'CLASS=CONF_AINPUTS&CONFIG=ERROR' 
-            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_ainputs}]")
-            return rsp_ainputs, 200
+            self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=ERROR'
+            self.GET_response_status_code = 200
+            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_ainputs(self.d_conf,self.args['VER'])
-        if bd_hash == self.args['HASH']:
-            rsp_ainputs = 'CLASS=CONF_AINPUTS&CONFIG=OK'
-            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_ainputs}]")
-            return rsp_ainputs, 200
+        #print(f"DEBUG::__get_conf_ainputs__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=OK'
+            self.GET_response_status_code = 200
+            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
             
         # No coinciden: mando la nueva configuracion
-        rsp_ainputs = self.dlgutils.get_response_ainputs(self.d_conf,self.args['VER'])
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_ainputs}]")
-        return rsp_ainputs, 200
+        self.GET_response = self.dlgutils.get_response_ainputs(self.d_conf,self.args['VER'])
+        self.GET_response_status_code = 200
+        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return
 
-    def __get_conf_counters__(self):
+    def __GET_conf_counters__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_COUNTERS&HASH=0x86
@@ -227,23 +259,26 @@ class ApiComms(Resource):
         #
         # Chequeo la configuracion
         if self.d_conf is None:
-            rsp_counters = 'CLASS=CONF_COUNTERS&CONFIG=ERROR' 
-            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_counters}]")
-            return rsp_counters, 200
+            self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_counters(self.d_conf,self.args['VER'])
-        if bd_hash == self.args['HASH']:
-            rsp_counters = 'CLASS=CONF_COUNTERS&CONFIG=OK'
-            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_counters}]")
-            return rsp_counters, 200
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=OK'
+            self.GET_response_status_code = 200
+            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
             
         # No coinciden: mando la nueva configuracion
-        rsp_counters = self.dlgutils.get_response_counters(self.d_conf,self.args['VER'])
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_counters}]")
-        return rsp_counters, 200
+        self.GET_response = self.dlgutils.get_response_counters(self.d_conf,self.args['VER'])
+        self.GET_response_status_code = 200
+        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return
     
-    def __get_conf_modbus__(self):
+    def __GET_conf_modbus__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_MODBUS&HASH=0x86
@@ -252,23 +287,26 @@ class ApiComms(Resource):
         #
         # Chequeo la configuracion
         if self.d_conf is None:
-            rsp_modbus = 'CLASS=CONF_MODBUS&CONFIG=ERROR' 
-            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_modbus}]")
-            return rsp_modbus, 200
+            self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            app.logger.error(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_modbus(self.d_conf,self.args['VER'])
-        if bd_hash == self.args['HASH']:
-            rsp_modbus = 'CLASS=CONF_MODBUS&CONFIG=OK'
-            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_modbus}]")
-            return rsp_modbus, 200
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=OK'
+            self.GET_response_status_code = 200
+            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return
             
         # No coinciden: mando la nueva configuracion
-        rsp_modbus = self.dlgutils.get_response_modbus(self.d_conf,self.args['VER'])
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_modbus}]")
-        return rsp_modbus, 200
+        self.GET_response = self.dlgutils.get_response_modbus(self.d_conf,self.args['VER'])
+        self.GET_response_status_code = 200
+        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return
     
-    def __get_data__(self):
+    def __GET_data__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
@@ -303,9 +341,10 @@ class ApiComms(Resource):
         #
         # 4) Respondo
         now=dt.datetime.now().strftime('%y%m%d%H%M')
-        rsp_data = f'CLASS=DATA&CLOCK={now};{ordenes}'
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_data}]")
-        return rsp_data, 200
+        self.GET_response = f'CLASS=DATA&CLOCK={now};{ordenes}'
+        self.GET_response_status_code = 200
+        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return
 
     def get(self):
         ''' 
@@ -327,46 +366,44 @@ class ApiComms(Resource):
         if self.unit_id == self.debug_unit_id:
             app.logger.debug("CLASS=%(a)s", {'a': self.args['CLASS'] })
         
+        # Los PING siempre se responden !!
+        if self.args['CLASS'] == 'PING':
+            self.__GET_ping__()
+            self.__GET_format_response__()
+            return self.GET_response, self.GET_response_status_code
+
         # Leo la configuracion
-        rsp_status, rsp_msg, rsp_code = self.__read_configuration__()
-        if not rsp_status:
-            return format_response(rsp_msg), rsp_code
+        if not self.__read_configuration__():
+            self.__GET_format_response__()
+            return self.GET_response, self.GET_response_status_code
         
         # Analizo los tipos de frames
-        #
-        if self.args['CLASS'] == 'PING':
-            rsp_ping, status_code = self.__get_ping__()
-            return format_response(rsp_ping), status_code
-        
         if self.args['CLASS'] == 'CONF_BASE':
-            rsp_base, status_code = self.__get_conf_base__()
-            return format_response(rsp_base), status_code
-        
-        if self.args['CLASS'] == 'CONF_AINPUTS':
-            rsp_ainputs, status_code = self.__get_conf_ainputs__()
-            return format_response(rsp_ainputs), status_code
+            self.__GET_conf_base__()
+        elif self.args['CLASS'] == 'CONF_AINPUTS':
+            self.__GET_conf_ainputs__()
+        elif self.args['CLASS'] == 'CONF_COUNTERS':
+            self.__GET_conf_counters__()
+        elif self.args['CLASS'] == 'CONF_MODBUS':
+            self.__GET_conf_modbus__()
+        elif self.args['CLASS'] == 'DATA':
+            self.__GET_data__()
+        else:
+            self.GET_response = 'ERROR:UNKNOWN FRAME TYPE'
+            self.GET_response_status_code = 200
+            app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
 
-        if self.args['CLASS'] == 'CONF_COUNTERS':
-            rsp_counters, status_code = self.__get_conf_counters__()
-            return format_response(rsp_counters), status_code
-
-        if self.args['CLASS'] == 'CONF_MODBUS':
-            rsp_modbus, status_code = self.__get_conf_modbus__()
-            return format_response(rsp_modbus), status_code
-
-        if self.args['CLASS'] == 'DATA':
-            rsp_data, status_code = self.__get_data__()
-            return format_response(rsp_data), status_code
-
-        rsp_error = 'ERROR:UNKNOWN FRAME TYPE'
-        app.logger.info(f"CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{rsp_error}]")
-        return format_response(rsp_error), 200
+        self.__GET_format_response__()
+        return self.GET_response, self.GET_response_status_code
     
     def __post_reception__(self):
         '''
         Debo convertir el byte stream recibido del PLC a un named dict de acuerdo al formato
         del rcvd_memblock. 
         '''
+        if self.unit_id == self.debug_unit_id:
+            app.logger.info(f'PLC={self.unit_id}, PRCESSING_RECEPTION')
+        
         # Cargo los datos (memblock) recibidos del PLC (post) al objeto mbk
         # Los datos los leo con get_data() como bytestring.
         rx_payload = request.get_data()
@@ -374,6 +411,8 @@ class ApiComms(Resource):
         #
         # Convierto el bytestring de datos recibidos de acuerdo a la definicion de RCVD MBK en un dict.
         if not self.mbk.convert_rxbytes2dict():
+            self.POST_response = "RECEPTION_ERROR"
+            self.POST_response_status_code = 200
             return False
         
         # Guardo los datos en las BD (redis y SQL).
@@ -418,6 +457,9 @@ class ApiComms(Resource):
         Serializo (memblock) el diccionario de variables a enviar
 
         '''
+        if self.unit_id == self.debug_unit_id:
+            app.logger.info(f'PLC={self.unit_id}, PRCESSING_RESPONSE')
+        
         # Paso 1)
         # Leo de la configuracion las variables remotas que debo enviar al PLC
         d_remvars = self.d_conf.get('REMVARS',{})
@@ -433,8 +475,11 @@ class ApiComms(Resource):
                 # Si da error genero un mensaje pero continuo para no trancar al datalogger.
                 app.logger.error(f"ID={self.args['ID']},ERROR AL LEER DATALINE. Err=({r_data.status_code}){r_data.text}")
             else:
-                d_remote_datalines[unit_id] = r_data.json()
+                d_remote_datalines[unit_id] = json.loads(r_data.json())
         #
+        if self.unit_id == self.debug_unit_id:
+            app.logger.info(f'PLC={self.unit_id}, d_remote_datalines={d_remote_datalines}')
+
         # Armo el diccionario con las variables y valores de la respuesta al PLC
         d_responses = {}
         for unit_id in d_remvars:
@@ -456,9 +501,9 @@ class ApiComms(Resource):
         #
         # Paso 2)
         # Leo las variables(ordenes) de  ATVISE y las agrego al diccionario de respuestas
-        r_atvise = requests.get(f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes/atvise', params={'unit':unit_id}, timeout=10 )
+        r_atvise = requests.get(f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes/atvise', params={'unit':self.unit_id}, timeout=10 )
         if r_atvise.status_code == 200:
-            d_atvise_responses = r_atvise.json()
+            d_atvise_responses = json.loads(r_atvise.json())
             if self.unit_id == self.debug_unit_id:
                 app.logger.info(f'PLC={self.unit_id}, d_atvise_responses={d_atvise_responses}')
         elif r_atvise.status_code == 204:
@@ -470,7 +515,10 @@ class ApiComms(Resource):
         #
         # Paso 3)
         # Junto todas las variables de la respuesta en un solo diccionario
-        d_responses.update(d_atvise_responses)
+        #d_responses.update(d_atvise_responses)
+        #print(f"DEBUG: type of d_responses = {type(d_responses)}")
+        #print(f"DEBUG: type of d_atvise_responses = {type(d_atvise_responses)}")
+        d_responses = { **d_responses, **d_atvise_responses }
         if self.unit_id == self.debug_unit_id:
             app.logger.info(f'PLC={self.unit_id}, d_responses={d_responses}')
         #
@@ -502,9 +550,10 @@ class ApiComms(Resource):
         app.logger.info("PLC_QS=%(a)s", {'a': request.query_string })
     
         # Leo la configuracion
-        rsp_status, rsp_msg, rsp_code = self.__read_configuration__()
-        if not rsp_status:
-            return format_response(rsp_msg), rsp_code
+        if not self.__read_configuration__():
+            self.POST_response = "CONFIG_ERROR"
+            self.POST_response_status_code = 204
+            return self.POST_response, self.POST_response_status_code
 
         # Leo de la configuracion la definicion del memblock y la cargo en el objeto mbk
         d_mbk = self.d_conf.get('MEMBLOCK',{})
@@ -513,7 +562,12 @@ class ApiComms(Resource):
             app.logger.info(f"PLC: ID={self.args['ID']}, MBK={d_mbk}")
         
         # Recepcion
-        _ = self.__post_reception__()
+        if not self.__post_reception__():
+            app.logger.error(f"PLC={self.unit_id}, ERROR AL PROCESAR RCVDATA")
+            self.POST_response = "RECEPTION_ERROR"
+            self.POST_response_status_code = 204
+            return self.POST_response, self.POST_response_status_code
+        
         # Respuesta
         sresp = self.__post_response__()
         #sresp = b'PLC respuesta de Spymovil'
