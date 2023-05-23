@@ -41,6 +41,7 @@ r_conf=requests.post('http://127.0.0.1:500/apicomms',params={'ID':'PLCTEST','TYP
 En el log de la apicomms vamos a ver que se decodifica correctamente.
 '''
 
+import os
 import json
 import datetime as dt
 import requests
@@ -52,10 +53,13 @@ import plcmemblocks
 app = Flask(__name__)
 api = Api(app)
 
-APIREDIS_HOST='127.0.0.1'
-APIREDIS_PORT='5100'
-APISQL_HOST='192.168.0.6'
-APISQL_PORT='8086'
+APIREDIS_HOST = os.environ.get('APIREDIS_HOST','127.0.0.1')
+APIREDIS_PORT = os.environ.get('APIREDIS_PORT','5100' )
+APISQL_HOST = os.environ.get('APISQL_HOST','192.168.0.6')
+APISQL_PORT = os.environ.get('APISQL_PORT','8086')
+
+print(f'APIREDIS: host={APIREDIS_HOST}, port={APIREDIS_PORT}')
+print(f'APISQL: host={APISQL_HOST}, port={APISQL_PORT}')
 
 
 class PlcTest(Resource):
@@ -396,7 +400,7 @@ class ApiComms(Resource):
         self.__GET_format_response__()
         return self.GET_response, self.GET_response_status_code
     
-    def __post_reception__(self):
+    def __POST_reception__(self):
         '''
         Debo convertir el byte stream recibido del PLC a un named dict de acuerdo al formato
         del rcvd_memblock. 
@@ -433,7 +437,7 @@ class ApiComms(Resource):
         #
         return True
    
-    def __post_response__(self):
+    def __POST_response__(self):
         '''
         Preparo la respuesta a enviar al PLC.
         Armo un diccionario con todas las variables y valores a enviar que luego lo voy a 
@@ -448,7 +452,7 @@ class ApiComms(Resource):
             REMVARS = { 'KIYU001':[('HTQ1', 'ALTURA_TANQUE_KIYU_1'), ('HTQ2', 'ALTURA_TANQUE_KIYU_2')],
                     'SJOSE001' : [ ('PA', 'PRESION_ALTA_SJ1'), ('PB', 'PRESION_BAJA_SQ1')]
                   }
-            dlgid: { [(Nombre_en_equipo_remoto, Nombre_en_equipo_destino ),...], }
+             { dlgid: [(Nombre_en_equipo_remoto, Nombre_en_equipo_destino ),...], }
 
         Paso2:
         Leo las ordenes de ATVISE y las agrego al diccionario
@@ -460,7 +464,7 @@ class ApiComms(Resource):
         if self.unit_id == self.debug_unit_id:
             app.logger.info(f'PLC={self.unit_id}, PRCESSING_RESPONSE')
         
-        # Paso 1)
+        # Paso 1) REMVARS
         # Leo de la configuracion las variables remotas que debo enviar al PLC
         d_remvars = self.d_conf.get('REMVARS',{})
         if self.unit_id == self.debug_unit_id:
@@ -499,7 +503,7 @@ class ApiComms(Resource):
         if self.unit_id == self.debug_unit_id:
             app.logger.info(f'PLC={self.unit_id}, d_responses={d_responses}')
         #
-        # Paso 2)
+        # Paso 2) ATVISE
         # Leo las variables(ordenes) de  ATVISE y las agrego al diccionario de respuestas
         r_atvise = requests.get(f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes/atvise', params={'unit':self.unit_id}, timeout=10 )
         if r_atvise.status_code == 200:
@@ -562,14 +566,14 @@ class ApiComms(Resource):
             app.logger.info(f"PLC: ID={self.args['ID']}, MBK={d_mbk}")
         
         # Recepcion
-        if not self.__post_reception__():
+        if not self.__POST_reception__():
             app.logger.error(f"PLC={self.unit_id}, ERROR AL PROCESAR RCVDATA")
             self.POST_response = "RECEPTION_ERROR"
             self.POST_response_status_code = 204
             return self.POST_response, self.POST_response_status_code
         
         # Respuesta
-        sresp = self.__post_response__()
+        sresp = self.__POST_response__()
         #sresp = b'PLC respuesta de Spymovil'
         #sresp = b'\n\x0bf\xe6\xf6Bb\x04W\x02\xecq\xe4C:\x16\x00\x00\x00\x00\x00\x0b\xa3'
         #

@@ -1,19 +1,5 @@
-1- Agregar variables de entorno para pasar los host y ports.
-3- RECOVER ID / SAVEDLGID
-
-7- Remote VARS
-8- Ver que headers manda el modem con POST
+3- DEFAULTS: RECOVER ID / SAVEDLGID
 9- Process
-10- Documentar uso y nombres en REDIS
-11- Testing
 12- Pasar a Docker
 13- Docker Testing
 
--------------------------------------------------------------------
-1- Al resetearse siempre se reconfigura todo.
-   El problema es que al comparar los hashes, el calculado es numerico
-   y el que leo de los args es str. OK
-2- Los ainputs siempre se reconfiguran. OK
-3- En apiredis logueo cuando la salida no es 200.OK
-4- Configuracion con DEFAULT
-5- Configuracion con nombre no exitente en BD

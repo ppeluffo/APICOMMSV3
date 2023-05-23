@@ -217,6 +217,9 @@ class Memblock:
                 self.app.logger.debug(  f'ID={self.plcid}, FUNC=convert_dict2bytes, ERROR idx={idx} x={x} type(x)={type(x)} sformat[idf]={sformat[idf]} ntuple[idx]={ntuple[idx]}, Err={ex}' )
                 continue
         #
+        if self.debug:
+            self.app.logger.info(  f'ID={self.plcid}, FUNC=convert_dict2bytes, list_values={list_values}' )
+        #
         # Convierto la ntuple a un bytearray serializado 
         try:
             # self.tx_bytestream = pack( sformat, *ntuple)   

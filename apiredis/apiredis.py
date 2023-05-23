@@ -43,6 +43,7 @@ Notas de desarrollo:
 
 '''
 
+import os
 import pickle
 import datetime as dt
 import redis
@@ -53,10 +54,18 @@ from flask_restful import Resource, Api, reqparse
 app = Flask(__name__)
 api = Api(app)
 
-REDIS_HOST='127.0.0.1'
+#REDIS_HOST='127.0.0.1'
 #REDIS_HOST='192.168.0.6'
-REDIS_PORT='6379'
-REDIS_DB='0'
+#REDIS_PORT='6379'
+#REDIS_DB='0'
+
+REDIS_HOST = os.environ.get('REDIS_HOST','127.0.0.1')
+REDIS_PORT = os.environ.get('REDIS_PORT','6379')
+REDIS_DB = os.environ.get('REDIS_DB','0')
+
+APIREDIS_PORT = os.environ.get('APIREDIS_PORT','5100')
+
+print(f'DB REDIS: HOST={REDIS_HOST},PORT={REDIS_PORT},ID={REDIS_DB} ')
 
 '''
 Pendiente:
@@ -396,5 +405,5 @@ api.add_resource( QueueLength, '/apiredis/queuelength')
 api.add_resource( QueueItems, '/apiredis/queueitems')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port='5100', debug=True)
+    app.run(host='0.0.0.0', port=APIREDIS_PORT, debug=True)
 
