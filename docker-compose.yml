@@ -1,0 +1,21 @@
+version: '3.1'
+
+services:
+
+  appredis:
+    image: ppeluffo/appredis:latest
+    ports:
+      - "5100:5100"
+
+  appcomms:
+    image: ppeluffo/appcomms:latest
+    ports:
+      - "5000:5000"
+
+  appsql:
+    image: ppeluffo/appsql:latest
+    ports:
+      - "5200:5200"
+
+  redis:
+    image: redis:alpine

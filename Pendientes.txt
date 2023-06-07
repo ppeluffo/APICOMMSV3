@@ -1,5 +1,2 @@
-3- DEFAULTS: RECOVER ID / SAVEDLGID
-9- Process
-12- Pasar a Docker
-13- Docker Testing
+
 

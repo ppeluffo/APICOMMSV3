@@ -4,11 +4,19 @@ Clase especializada en utilidades de frames de dataloggers version SPXR3
 '''
 
 import re
+import requests
+import datetime as dt
+import json
+
+APIREDIS_HOST = 'appredis'
+APIREDIS_PORT = '5100'
 
 class dlgutils:
 
-    def __init__(self):
+    def __init__(self, d_conf):
         self.d_local_conf = None
+        self.ifw_ver = 0
+        self.D_API_CONF = d_conf
 
     def u_hash( self, seed, line ):
         '''
@@ -57,6 +65,18 @@ class dlgutils:
         RETURN: int
         '''
         self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_base_V110__()
+        else:
+            print("ERROR: Version no soportada")
+            return -1
+    
+    def __get_hash_config_base_V110__(self):
+        '''
+        Calculo el hash para la versión 110
+        '''
         xhash = 0
         timerpoll = int(self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
         timerdial = int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
@@ -84,19 +104,15 @@ class dlgutils:
         xhash = self.u_hash(xhash, hash_str)
         #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
-        # A partir de la version 105 incorporamos 'samples'y almlevel'
-        int_fw_ver = self.version2int( fw_ver)
-        #print(f'DEBUG::get_hash_config_base: int_fw_ver={int_fw_ver}')
-        if int_fw_ver >= 105:
-            samples = int(self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
-            almlevel = int(self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
-            hash_str = f'[SAMPLES:{samples:02}]'
-            xhash = self.u_hash(xhash, hash_str)
-            #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
-            #
-            hash_str = f'[ALMLEVEL:{almlevel:02}]'
-            xhash = self.u_hash(xhash, hash_str)
-            #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        samples = int(self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
+        almlevel = int(self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
+        hash_str = f'[SAMPLES:{samples:02}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        #
+        hash_str = f'[ALMLEVEL:{almlevel:02}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
         #print(f'DEBUG::get_hash_config_base: xhash={xhash}')
         return xhash
@@ -108,7 +124,16 @@ class dlgutils:
         '''
         #
         self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
         #
+        if self.ifw_ver == 110:
+            return self.__get_response_base_V110__()
+        print("ERROR: Version no soportada")
+        return 'ERROR:UNKNOWN VERSION'
+
+    def __get_response_base_V110__(self):
+        '''
+        '''
         timerpoll = int( self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
         timerdial = int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
         pwr_modo = int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
@@ -121,15 +146,12 @@ class dlgutils:
         else:
             s_pwrmodo = 'MIXTO'
         #
+        samples = int( self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
+        almlevel = int( self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
+        #
         response = 'CLASS=CONF_BASE&'
         response += f'TPOLL={timerpoll}&TDIAL={timerdial}&PWRMODO={s_pwrmodo}&PWRON={pwr_hhmm_on:04}&PWROFF={pwr_hhmm_off:04}'
-        #
-        int_fw_ver = self.version2int( fw_ver)
-        if int_fw_ver >= 105:
-            samples = int( self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
-            almlevel = int( self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
-            response += f'&SAMPLES={samples}&ALMLEVEL={almlevel}'
-        #    
+        response += f'&SAMPLES={samples}&ALMLEVEL={almlevel}'  
         return response
     
     def get_hash_config_ainputs(self, d_conf, fw_ver):
@@ -139,20 +161,27 @@ class dlgutils:
         '''
         #
         self.d_local_conf = d_conf
-        int_fw_ver = self.version2int( fw_ver)
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_ainputs_V110__()
+        else:
+            print("ERROR: Version no soportada")
+            return -1
+    
+    def __get_hash_config_ainputs_V110__(self):
+        '''
+        '''
         xhash = 0
         for channel in ['A0','A1','A2']:
+            enable = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('NAME','X')
-            if name == 'X':
-                hash_str = f'[{channel}:X,4,20,0.00,10.00,0.00]'
-            else:
-                imin=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN','0'))
-                imax=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX','0'))
-                mmin=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN','0'))
-                mmax=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX','0'))
-                offset=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET','0'))
-                hash_str = f'[{channel}:{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
-            #
+            imin=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN','0'))
+            imax=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX','0'))
+            mmin=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN','0'))
+            mmax=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX','0'))
+            offset=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET','0'))
+            hash_str = f'[{channel}:{enable},{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
             xhash = self.u_hash(xhash, hash_str)
             #print(f'DEBUG::get_hash_config_ainputs: hash_str={hash_str}, xhash={xhash}')
         return xhash
@@ -163,20 +192,30 @@ class dlgutils:
         '''
         #
         self.d_local_conf = d_conf
-        int_fw_ver = self.version2int( fw_ver)
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_response_ainputs_V110__()
+        print("ERROR: Version no soportada")
+        return 'ERROR:UNKNOWN VERSION'
+ 
+    def __get_response_ainputs_V110__(self):
+        '''
+        '''
         response = 'CLASS=CONF_AINPUTS&'
         for channel in ['A0','A1','A2']:
+            enable = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('ENABLE', 'FALSE')
             name = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('NAME', 'X')
             imin = int(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN', 4))
             imax = int(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX', 20))
             mmin = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN', 0.00))
             mmax = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX', 10.00))
             offset = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET', 0.00))
-            response += f'{channel}={name},{imin},{imax},{mmin},{mmax},{offset}&'
+            response += f'{channel}={enable},{name},{imin},{imax},{mmin},{mmax},{offset}&'
         #
         response = response[:-1]
         return response
-    
+        
     def get_hash_config_counters(self, d_conf, fw_ver):
         '''
         Calcula el hash de la configuracion de canales digitales ( contadores ).
@@ -184,30 +223,25 @@ class dlgutils:
         '''
         #
         self.d_local_conf = d_conf
-        int_fw_ver = self.version2int( fw_ver)
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_counters_V110__()
+        else:
+            print("ERROR: Version no soportada")
+            return -1
+
+    def __get_hash_config_counters_V110__(self):
+        '''
+        '''
         xhash = 0
         for channel in ['C0','C1']:
+            enable = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME','X')
-            if name == 'X':
-                hash_str = f'[{channel}:X,1.000,0]'
-            else:
-                str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
-                if str_modo == 'CAUDAL':
-                    modo = 0    # caudal
-                else:
-                    modo = 1    # pulsos
-                magpp=float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
-                hash_str = f'[{channel}:{name},{magpp:.03f},{modo}]'
-                #
-            # La version 108 incorpora el tamaño del ringbuffer de caudalimetros
-            if int_fw_ver >= 108:
-                hash_str=hash_str[:-1]
-                if name == 'X':
-                    hash_str += ',1]'
-                else:
-                    rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
-                    hash_str += f',{rbsize}]'
-            #
+            modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
+            magpp=float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
+            rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+            hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo},{rbsize}]'
             xhash = self.u_hash(xhash, hash_str)
         #
         return xhash
@@ -217,22 +251,28 @@ class dlgutils:
         Calcula la respuesta de configuracion de canales contadores
         '''
         self.d_local_conf = d_conf
-        int_fw_ver = self.version2int( fw_ver)
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_response_counters_V110__()
+        print("ERROR: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+    
+    def __get_response_counters_V110__(self):
+        '''
+        '''
         response = 'CLASS=CONF_COUNTERS&'
         for channel in ['C0','C1']:
+            enable = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME', 'X')
             magpp = float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP', 1.00))
             str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
             rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
-            #
-            if int_fw_ver >= 108:
-                response += f'{channel}={name},{magpp},{str_modo},{rbsize}&'
-            else:
-                response += f'{channel}={name},{magpp},{str_modo}&'
+            response += f'{channel}={enable},{name},{magpp},{str_modo},{rbsize}&'
         #
         response = response[:-1]
         return response
-    
+
     def get_hash_config_modbus(self, d_conf, fw_ver):
         '''
         Calcula el hash de la configuracion de canales modbus.
@@ -240,33 +280,23 @@ class dlgutils:
         '''
         #
         self.d_local_conf = d_conf
-        int_fw_ver = self.version2int( fw_ver)
-        xhash = 0
-        for channel in ['M0','M1','M2','M3','M4']:
-            name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
-            if name == 'X':
-                hash_str = f'[{channel}:X,00,0000,00,00,U16,C0123,00]'
-            else:
-                sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
-                reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
-                nro_regs=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
-                fcode=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
-                mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
-                codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
-                pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
-                hash_str = f'[{channel}:{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
-            #
-            xhash = self.u_hash(xhash, hash_str)
+        self.ifw_ver = self.version2int( fw_ver)
         #
-        return xhash
-    
-    def get_response_modbus(self, d_conf, fw_ver):
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_modbus_V110__()
+        else:
+            print("ERROR: Version no soportada")
+            return -1
+
+    def __get_hash_config_modbus_V110__(self):
         '''
-        Calcula la respuesta de configuracion de canales modbus
         '''
-        self.d_local_conf = d_conf
-        int_fw_ver = self.version2int( fw_ver)
-        response = 'CLASS=CONF_MODBUS&'
+        xhash = 0
+        enable=self.d_local_conf.get('MODBUS',{}).get('ENABLE','FALSE')
+        localaddr=int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR','1'))
+
+        hash_str = f'[{enable}:{localaddr:02d}]'
+        xhash = self.u_hash(xhash, hash_str)
         for channel in ['M0','M1','M2','M3','M4']:
             name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
             sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
@@ -276,9 +306,94 @@ class dlgutils:
             mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
             codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
             pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
-            response += f'{channel}={name},{sla_addr},{reg_addr},{nro_regs},{fcode},{mtype},{codec},{pow10}&'
+            hash_str = f'[{channel}:TRUE,{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
+            xhash = self.u_hash(xhash, hash_str)
+        #
+        return xhash
+
+    def get_response_modbus(self, d_conf, fw_ver):
+        '''
+        Calcula la respuesta de configuracion de canales modbus
+        '''
+        self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_response_modbus_V110__()
+        print("ERROR: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+ 
+    def __get_response_modbus_V110__(self):
+        '''
+        '''
+        enable=self.d_local_conf.get('MODBUS',{}).get('ENABLE','FALSE')
+        localaddr=int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR',0x01))
+
+        response = f'CLASS=CONF_MODBUS&ENABLE={enable}&LOCALADDR={localaddr}&'
+
+        for channel in ['M0','M1','M2','M3','M4']:
+            enable = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ENABLE','FALSE')
+            name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
+            sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
+            reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
+            nro_regs=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
+            fcode=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
+            mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
+            codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
+            pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
+            response += f'{channel}={enable},{name},{sla_addr},{reg_addr},{nro_regs},{fcode},{mtype},{codec},{pow10}&'
         #
         response = response[:-1]
         return response
-  
+
+    def process_data(self, app, d_payload, fw_ver):
+        '''
+        '''
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__process_data_V110__(app, d_payload)
+        print("ERROR: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+        
+    def __process_data_V110__(self, app, d_args):
+
+        # 1) Armo el payload.
+        d_payload = {}
+        ID = d_args.get('ID','NONE')
+        VER = d_args.get('VER','NONE')
+        TYPE = d_args.get('TYPE','NONE')
+        CLASS = d_args.get('CLASS','NONE')
+
+        for key in d_args:
+            if key not in ('ID','TYPE','CLASS','VER'):
+                d_payload[key] = d_args.get(key)
+        #    
+        # 1) Guardo los datos
+        r_data = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/dataline", params={'unit':ID,'type':'DLG'}, json=json.dumps(d_payload), timeout=10 )
+        if r_data.status_code != 200:
+            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
+            app.logger.error(f"CLASS={CLASS},ID={ID},ERROR AL GUARDAR DATA EN REDIS. Err=({r_data.status_code}){r_data.text}")
+        #
+        # 3) Leo las ordenes
+        r_data = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes", params={'unit':ID }, timeout=10 )
+        ordenes = ''
+        if r_data.status_code == 200:
+            ordenes = r_data.json()
+            app.logger.info(f"CLASS={CLASS},ID={ID }, ORDENES=[{ordenes}]")
+        elif r_data.status_code == 204:
+            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
+            app.logger.info(f"CLASS={CLASS},ID={ID},NO HAY RCD ORDENES")
+        else:
+            app.logger.error(f"CLASS={CLASS},ID={ID},ERROR AL LEER ORDENES. Err=({r_data.status_code}){r_data.text}")
+        #
+        # 3.1) Si RESET entonces borro la configuracion
+        if 'RESET' in [ordenes]:
+            _ = requests.delete(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion", params={'unit':ID}, timeout=10 )
+            app.logger.info(f"CLASS={CLASS},ID={ID}, DELETE REDIS RCD.")
+        #
+        # 4) Respondo
+        now=dt.datetime.now().strftime('%y%m%d%H%M')
+        return f'CLASS=DATA&CLOCK={now};{ordenes}'
     
+
