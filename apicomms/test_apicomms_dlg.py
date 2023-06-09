@@ -9,7 +9,7 @@ class ApicommsTestDlg:
 
     def __init__(self):
         self.ID = 'DLGTEST'
-        self.VER = '1.0.9'
+        self.VER = '1.1.0'
         self.TYPE = 'DLG'
         self.apihost = '127.0.0.1'
         self.apiport = '5000'
@@ -21,7 +21,7 @@ class ApicommsTestDlg:
         '''
         self.set_ID('DLGTEST')
         self.set_TYPE('DLG')
-        self.set_VER('1.0.9')
+        self.set_VER('1.1.0')
         self.url = f'http://{self.apihost}:{self.apiport}/apicomms'
         params = {'ID':self.ID, 'TYPE':self.TYPE, 'VER':self.VER, 'CLASS':'PING'}
         req=requests.get(url=self.url, params=params, timeout=10)
@@ -55,8 +55,8 @@ class ApicommsTestDlg:
         '''
         ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_AINPUTS&HASH=0x10
         '''
-        self.set_ID('PABLO')
-        self.set_TYPE('DLGTEST')
+        self.set_ID('DLGTEST')
+        self.set_TYPE('SPXR3')
         self.set_VER('1.1.0')
         self.url = f'http://{self.apihost}:{self.apiport}/apicomms'
         params = {'ID':self.ID, 'TYPE':self.TYPE, 'VER':self.VER, 'CLASS':'CONF_AINPUTS', 'HASH':'0x10'}
@@ -73,8 +73,8 @@ class ApicommsTestDlg:
         '''
         ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_COUNTERS&HASH=0x10
         '''
-        self.set_ID('PABLO')
-        self.set_TYPE('DLGTEST')
+        self.set_ID('DLGTEST')
+        self.set_TYPE('SPXR3')
         self.set_VER('1.1.0')
         self.url = f'http://{self.apihost}:{self.apiport}/apicomms'
         params = {'ID':self.ID, 'TYPE':self.TYPE, 'VER':self.VER, 'CLASS':'CONF_COUNTERS', 'HASH':'0x10'}
@@ -91,8 +91,8 @@ class ApicommsTestDlg:
         '''
         ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_MODBUS&HASH=0x10
         '''
-        self.set_ID('PABLO')
-        self.set_TYPE('DLGTEST')
+        self.set_ID('DLGTEST')
+        self.set_TYPE('SPXR3')
         self.set_VER('1.1.0')
         self.url = f'http://{self.apihost}:{self.apiport}/apicomms'
         params = {'ID':self.ID, 'TYPE':self.TYPE, 'VER':self.VER, 'CLASS':'CONF_MODBUS', 'HASH':'0x10'}
@@ -109,8 +109,8 @@ class ApicommsTestDlg:
         '''
         ID=PABLO&TYPE=SPXR3&VER=1.1.0&CLASS=DATA&DATE=230321&TIME=094504&A0=1.24&A1=3.45&A2=7.89&C0=0.120&C1=10.400&bt=12.49
         '''
-        self.set_ID('PABLO')
-        self.set_TYPE('DLGTEST')
+        self.set_ID('DLGTEST')
+        self.set_TYPE('SPXR3')
         self.set_VER('1.1.0')
         self.url = f'http://{self.apihost}:{self.apiport}/apicomms'
         params = {'ID':self.ID, 'TYPE':self.TYPE, 'VER':self.VER, 'CLASS':'DATA', 'DATE':'230321','TIME':'094504',

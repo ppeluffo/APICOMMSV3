@@ -11,6 +11,7 @@ max_requests_jitter = 50
 #worker_class = 'sync'
 loglevel = 'info'
 accesslog = '/var/log/gunicorn/apicomms.log'
-acceslogformat ="%(h)s %(l)s %(u)s %(t)s %(r)s %(s)s %(b)s %(f)s %(a)s"
+#acceslogformat ="%(h)s %(l)s %(u)s %(t)s %(r)s %(s)s %(b)s %(f)s %(a)s"
+acceslogformat ="%(f)s %(a)s"
 errorlog =  '/var/log/gunicorn/apicomms.log'
 

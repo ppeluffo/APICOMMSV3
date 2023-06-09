@@ -5,9 +5,9 @@ API de comunicaciones SPCOMMS para los dataloggers y plc.
 
 import os
 import json
-import requests
 import datetime as dt
 import logging
+import requests
 from flask import Flask, request, make_response
 from flask_restful import Resource, Api, reqparse
 import apicomms_utils_dlg
@@ -16,24 +16,11 @@ import apicomms_utils_plc
 app = Flask(__name__)
 api = Api(app)
 
-APIREDIS_HOST = 'appredis'
+APIREDIS_HOST = 'apiredis'
 APIREDIS_PORT = '5100'
 
-D_API_CONF = {
- #   'APICOMMS_HOST': os.environ.get('APICOMMS_HOST','0.0.0.0'),
- #   'APICOMMS_PORT': os.environ.get('APICOMMS_PORT','5000'),
- #   'APIREDIS_HOST': os.environ.get('APIREDIS_HOST','127.0.0.1'),
- #   'APIREDIS_PORT': os.environ.get('APIREDIS_PORT','5100' ),
-    'APISQL_HOST': os.environ.get('APISQL_HOST','127.0.0.1'),
-    'APISQL_PORT': os.environ.get('APISQL_PORT','5200'),
-
-#    'APISQL_HOST': os.environ.get('APISQL_HOST','192.168.0.6'),
-#    'APISQL_PORT': os.environ.get('APISQL_PORT','5200')
-}
-
-#print(f"APICOMMS: host={D_API_CONF['APICOMMS_HOST']}, port={D_API_CONF['APICOMMS_PORT']}")
-#print(f"APIREDIS: host={D_API_CONF['APIREDIS_HOST']}, port={D_API_CONF['APIREDIS_PORT']}")
-#print(f"APISQL: host={D_API_CONF['APISQL_HOST']}, port={D_API_CONF['APISQL_PORT']}")
+APICONF_HOST = 'apiconf'
+APICONF_PORT = '5200'
             
 class ApiComms(Resource):
     ''' 
@@ -42,7 +29,7 @@ class ApiComms(Resource):
     def __init__(self):
         self.debug_unit_id = None
         self.args = None
-        self.dlgutils = apicomms_utils_dlg.dlgutils(D_API_CONF)
+        self.dlgutils = apicomms_utils_dlg.dlgutils()
         self.d_conf = None
         self.mbk = apicomms_utils_plc.Memblock(app)
         self.parser = None
@@ -60,7 +47,7 @@ class ApiComms(Resource):
         Consulta el nombre del equipo que debe logearse.
         '''
         try:
-            r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion/debugid", timeout=10 )
+            r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/debugid", timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err={err}")
             self.debug_unit_id = None
@@ -68,7 +55,7 @@ class ApiComms(Resource):
         
         if r_conf.status_code == 200:
             d = json.loads(r_conf.json())
-            self.debug_unit_id = d['debugId']
+            self.debug_unit_id = d['debugid']
             #app.logger.debug(f"DEBUG_DLGID={self.debug_unit_id}")
         else:
             app.logger.info(f"WARN XC001: No debug unit, Err=({r_conf.status_code}){r_conf.text}")
@@ -87,7 +74,7 @@ class ApiComms(Resource):
         '''
         # Intento leer desde REDIS.
         try:
-            r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion", params={'unit':self.args['ID']}, timeout=10 )
+            r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/config", params={'unit':self.args['ID']}, timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err:{err}")
             return False
@@ -102,7 +89,7 @@ class ApiComms(Resource):
         #
         # Intento leer desde SQL
         try:
-            r_conf = requests.get(f"http://{D_API_CONF['APISQL_HOST']}:{D_API_CONF['APISQL_PORT']}/apisql/config", params={'unit':self.args['ID']}, timeout=10 )
+            r_conf = requests.get(f"http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config", params={'unit':self.args['ID']}, timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err:{err}")
             return False
@@ -136,7 +123,7 @@ class ApiComms(Resource):
         app.logger.info(f"INFO ID={self.args['ID']}: SQL D_CONF={self.d_conf}")
         # Actualizo la redis.
         try:
-            r_conf = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion", params={'unit':self.args['ID']}, json=jd_conf, timeout=10 )
+            r_conf = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/config", params={'unit':self.args['ID']}, json=jd_conf, timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err:{err}")
             return False
@@ -192,7 +179,7 @@ class ApiComms(Resource):
         #
         # No esta en REDIS, buscamos en SQL
         try:
-            r_conf = requests.get(f'http://{APISQL_HOST}:{APISQL_PORT}/get/config', params={'dlgid':self.args['ID'], 'uid':self.args['UID']}, timeout=10 )
+            r_conf = requests.get(f'http://{APICONF_HOST}:{APICONF_PORT}/get/config', params={'dlgid':self.args['ID'], 'uid':self.args['UID']}, timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err:{err}")
             return '', 500
@@ -250,6 +237,8 @@ class ApiComms(Resource):
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_base(self.d_conf, self.VER )
+        if self.ID == self.debug_unit_id:
+            app.logger.info(f"INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_base__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_BASE&CONFIG=OK'
@@ -282,6 +271,8 @@ class ApiComms(Resource):
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_ainputs(self.d_conf,self.VER )
+        if self.ID == self.debug_unit_id:
+            app.logger.info(f"INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_ainputs__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=OK'
@@ -314,6 +305,8 @@ class ApiComms(Resource):
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_counters(self.d_conf,self.VER )
+        if self.ID == self.debug_unit_id:
+            app.logger.info(f"INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=OK'
             self.GET_response_status_code = 200
@@ -345,6 +338,8 @@ class ApiComms(Resource):
 
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_modbus(self.d_conf,self.VER )
+        if self.ID == self.debug_unit_id:
+            app.logger.info(f"INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=OK'
             self.GET_response_status_code = 200
@@ -363,7 +358,41 @@ class ApiComms(Resource):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
-        self.GET_response = self.dlgutils.process_data( app, request.args, self.VER )
+        d_payload = self.dlgutils.process_data( app, request.args, self.VER )
+        
+        if d_payload is None:
+            return 'ERROR:UNKNOWN VERSION',200
+
+        # 1) Guardo los datos
+        r_data = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/dataline", params={'unit':self.ID,'type':'DLG'}, json=json.dumps(d_payload), timeout=10 )
+        if r_data.status_code != 200:
+            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
+            app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL GUARDAR DATA EN REDIS. Err=({r_data.status_code}){r_data.text}")
+        #
+        # 3) Leo las ordenes
+        r_data = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes", params={'unit':self.ID }, timeout=10 )
+        d_ordenes = None
+        if r_data.status_code == 200:
+            jd_ordenes = r_data.json()
+            d_ordenes = json.loads(jd_ordenes)
+            ordenes = d_ordenes.get('ordenes','')
+            app.logger.info(f"CLASS={self.CLASS},ID={self.ID}, D_ORDENES={d_ordenes}")
+        elif r_data.status_code == 204:
+            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
+            app.logger.info(f"CLASS={self.CLASS},ID={self.ID},NO HAY RCD ORDENES")
+            ordenes = ''
+        else:
+            app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL LEER ORDENES. Err=({r_data.status_code}){r_data.text}")
+            ordenes = ''
+        #
+        # 3.1) Si RESET entonces borro la configuracion
+        if 'RESET' in ordenes:
+            _ = requests.delete(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/delete", params={'unit':self.ID}, timeout=10 )
+            app.logger.info(f"CLASS={self.CLASS},ID={self.ID}, DELETE REDIS RCD.")
+        #
+        # 4) Respondo
+        now=dt.datetime.now().strftime('%y%m%d%H%M')
+        self.GET_response = f'CLASS=DATA&CLOCK={now};{ordenes}'
         self.GET_response_status_code = 200
         self.__format_response__()
         app.logger.info(f"INFO CLASS={self.CLASS},ID={self.ID},RSP=[{self.GET_response}]")
@@ -627,7 +656,8 @@ class Ping(Resource):
     Prueba la conexion a la BD Redis
     '''
     def get(self):
-        
+        '''
+        '''
         # Pruebo la conexion a REDIS
         redis_status = 'ERR'
         try:
@@ -640,7 +670,7 @@ class Ping(Resource):
         # Pruebo la conexion a SQL
         sql_status = 'ERR'
         try:
-            r_conf = requests.get(f"http://{D_API_CONF['APISQL_HOST']}:{D_API_CONF['APISQL_PORT']}/apisql/ping",timeout=10 )
+            r_conf = requests.get(f"http://{APICONF_HOST}:{APICONF_PORT}/apiconf/ping",timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err:{err}")
         #
@@ -659,8 +689,9 @@ class Help(Resource):
     Devuelve el estado de la conexion a la BD Redis.
     '''
     def get(self):
+        '''
+        '''
         return {}, 200
-
 
 api.add_resource( ApiComms, '/apicomms')
 api.add_resource( Help, '/apicomms/help')
@@ -672,5 +703,7 @@ if __name__ != '__main__':
     app.logger.setLevel(gunicorn_logger.level)
 
 if __name__ == '__main__':
+    APIREDIS_HOST = '127.0.0.1'
+    APICONF_HOST = '127.0.0.1'
     app.run(host='0.0.0.0', port=5000, debug=True)
 

@@ -13,10 +13,9 @@ APIREDIS_PORT = '5100'
 
 class dlgutils:
 
-    def __init__(self, d_conf):
+    def __init__(self):
         self.d_local_conf = None
         self.ifw_ver = 0
-        self.D_API_CONF = d_conf
 
     def u_hash( self, seed, line ):
         '''
@@ -243,6 +242,7 @@ class dlgutils:
             rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
             hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo},{rbsize}]'
             xhash = self.u_hash(xhash, hash_str)
+            #print(f'DEBUG HASH COUNTERS: hash_str={hash_str}')
         #
         return xhash
     
@@ -308,6 +308,7 @@ class dlgutils:
             pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
             hash_str = f'[{channel}:TRUE,{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
             xhash = self.u_hash(xhash, hash_str)
+            print(f'DEBUG HASH MODBUS: hash_str={hash_str}')
         #
         return xhash
 
@@ -353,8 +354,9 @@ class dlgutils:
         #
         if self.ifw_ver == 110:
             return self.__process_data_V110__(app, d_payload)
+        #
         print("ERROR: Version no soportada")  
-        return 'ERROR:UNKNOWN VERSION'
+        return None
         
     def __process_data_V110__(self, app, d_args):
 
@@ -368,32 +370,6 @@ class dlgutils:
         for key in d_args:
             if key not in ('ID','TYPE','CLASS','VER'):
                 d_payload[key] = d_args.get(key)
-        #    
-        # 1) Guardo los datos
-        r_data = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/dataline", params={'unit':ID,'type':'DLG'}, json=json.dumps(d_payload), timeout=10 )
-        if r_data.status_code != 200:
-            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-            app.logger.error(f"CLASS={CLASS},ID={ID},ERROR AL GUARDAR DATA EN REDIS. Err=({r_data.status_code}){r_data.text}")
         #
-        # 3) Leo las ordenes
-        r_data = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes", params={'unit':ID }, timeout=10 )
-        ordenes = ''
-        if r_data.status_code == 200:
-            ordenes = r_data.json()
-            app.logger.info(f"CLASS={CLASS},ID={ID }, ORDENES=[{ordenes}]")
-        elif r_data.status_code == 204:
-            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-            app.logger.info(f"CLASS={CLASS},ID={ID},NO HAY RCD ORDENES")
-        else:
-            app.logger.error(f"CLASS={CLASS},ID={ID},ERROR AL LEER ORDENES. Err=({r_data.status_code}){r_data.text}")
-        #
-        # 3.1) Si RESET entonces borro la configuracion
-        if 'RESET' in [ordenes]:
-            _ = requests.delete(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion", params={'unit':ID}, timeout=10 )
-            app.logger.info(f"CLASS={CLASS},ID={ID}, DELETE REDIS RCD.")
-        #
-        # 4) Respondo
-        now=dt.datetime.now().strftime('%y%m%d%H%M')
-        return f'CLASS=DATA&CLOCK={now};{ordenes}'
-    
+        return d_payload
 

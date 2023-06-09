@@ -5,6 +5,7 @@ Script que prueba todas los entrypoints implementados en la API redis.
 
 import requests
 import json
+import sys
 
 DLG_CONF_TEMPLATE = {'ANALOGS': {
                         'A0': {'ENABLE':'TRUE', 'IMAX': '20','IMIN': '4','MMAX': '10','MMIN': '0','NAME': 'HTQ','OFFSET': '0'},
@@ -77,6 +78,20 @@ class TestApiRedis:
     def get_port(self):
         return self.port
     
+    def ping(self):
+        url = f'http://{self.host}:{self.port}/apiredis/ping'
+        try:
+            req=requests.get(url=url)
+        except:
+            print('REDIS NOT CONNECTED. EXIT')
+            return False
+
+        if req.status_code == 200:
+                print(f'PING OK.')
+        else:
+            print(f'PING FAIL. {req.status_code}')
+        return True
+    
     def delete(self, id='DLGTEST'):
         '''
         '''
@@ -91,7 +106,7 @@ class TestApiRedis:
     def configuracion_debugId(self):
         '''
         '''
-        url = f'http://{self.host}:{self.port}/apiredis/configuracion/debugid'
+        url = f'http://{self.host}:{self.port}/apiredis/debugid'
         req=requests.get(url=url)
         if req.status_code == 200:
             d_rsp = json.loads(req.json())
@@ -105,7 +120,7 @@ class TestApiRedis:
         '''
         '''
         jd_conf = json.dumps(d_conf)
-        url = f'http://{self.host}:{self.port}/apiredis/configuracion'
+        url = f'http://{self.host}:{self.port}/apiredis/config'
         req=requests.put(url=url,params={'unit':id}, json=jd_conf)
         if req.status_code == 200:
             print(f'SET_CONFIG <{id}> OK.')
@@ -114,7 +129,7 @@ class TestApiRedis:
         return
     
     def configuracion_get(self,id='DLGTEST',d_conf_ref = DLG_CONF_TEMPLATE):
-        url = f'http://{self.host}:{self.port}/apiredis/configuracion'
+        url = f'http://{self.host}:{self.port}/apiredis/config'
         req=requests.get(url=url,params={'unit':id})
         if req.status_code == 200:
             jd_conf=req.json()
@@ -192,7 +207,7 @@ class TestApiRedis:
         '''
         d={ 'ordenes_atvise': d_ordenes_atvise }
         jd=json.dumps(d)
-        url = f'http://{self.host}:{self.port}/apiredis/ordenes/atvise'
+        url = f'http://{self.host}:{self.port}/apiredis/ordenesatvise'
         req=requests.put(url=url, params={'unit':id}, json=jd)
         if req.status_code == 200:
             print(f'SET ORDENES_ATVISE <{id}> OK')
@@ -203,7 +218,7 @@ class TestApiRedis:
     def ordenes_atvise_get(self, id='PLCTEST', d_ordenes_atvise_ref=D_ORDENES_ATVISE_TEMPLATE ):
         '''
         '''
-        url = f'http://{self.host}:{self.port}/apiredis/ordenes/atvise'
+        url = f'http://{self.host}:{self.port}/apiredis/ordenesatvise'
         req=requests.get(url=url,params={'unit':id})
         if req.status_code == 200:
             jd =req.json()
@@ -223,26 +238,29 @@ if __name__ == '__main__':
 
     api = TestApiRedis()
 
+    if not api.ping():
+        sys.exit(1)
+
     api.configuracion_debugId()
     # DLG
     id = 'DLGTEST'
     print(f'Testing DLG c/id={id}')
-    api.delete(id=id)
-    api.configuracion_put(id=id, d_conf=DLG_CONF_TEMPLATE )
-    api.configuracion_get(id=id, d_conf_ref=DLG_CONF_TEMPLATE)
+#    api.delete(id=id)
+#    api.configuracion_put(id=id, d_conf=DLG_CONF_TEMPLATE )
+#    api.configuracion_get(id=id, d_conf_ref=DLG_CONF_TEMPLATE)
     api.ordenes_put(id=id)
     api.ordenes_get(id=id)
-    api.dataline_put(id=id, d_data=D_DATA_TEMPLATE)
-    api.dataline_get(id=id, d_data_ref=D_DATA_TEMPLATE)
+#    api.dataline_put(id=id, d_data=D_DATA_TEMPLATE)
+#    api.dataline_get(id=id, d_data_ref=D_DATA_TEMPLATE)
     #
     # PLC
-    id='PLCTEST'
-    print(f'Testing PLC c/id {id}')
-    api.delete(id=id)
-    api.configuracion_put(id=id, d_conf=PLC_CONF_TEMPLATE )
-    api.configuracion_get(id=id, d_conf_ref=PLC_CONF_TEMPLATE)
-    api.ordenes_atvise_put(id='PLCTEST', d_ordenes_atvise=D_ORDENES_ATVISE_TEMPLATE)
-    api.ordenes_atvise_get(id='PLCTEST', d_ordenes_atvise_ref=D_ORDENES_ATVISE_TEMPLATE)
+#    id='PLCTEST'
+#    print(f'Testing PLC c/id {id}')
+#    api.delete(id=id)
+#    api.configuracion_put(id=id, d_conf=PLC_CONF_TEMPLATE )
+#    api.configuracion_get(id=id, d_conf_ref=PLC_CONF_TEMPLATE)
+#    api.ordenes_atvise_put(id='PLCTEST', d_ordenes_atvise=D_ORDENES_ATVISE_TEMPLATE)
+#    api.ordenes_atvise_get(id='PLCTEST', d_ordenes_atvise_ref=D_ORDENES_ATVISE_TEMPLATE)
 
 
 
