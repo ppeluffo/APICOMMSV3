@@ -10,8 +10,8 @@ COPY apicomms_utils_plc.py .
 COPY gunicorn.conf.py .
 COPY wsgi.py .
 
-RUN mkdir /var/log/gunicorn
-RUN touch /var/log/gunicorn/apicomms.log && chmod 777 /var/log/gunicorn/apicomms.log
+#RUN mkdir /var/log/gunicorn
+#RUN touch /var/log/gunicorn/apicomms.log && chmod 777 /var/log/gunicorn/apicomms.log
 
 COPY entrypoint.sh .
 RUN chmod 777 /apicomms/*

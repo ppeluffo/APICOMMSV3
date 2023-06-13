@@ -2,6 +2,8 @@
 
 #import multiprocessing
 
+import multiprocessing
+
 max_requests = 1000
 max_requests_jitter = 50
 # Si queremos el log en stdout
@@ -15,5 +17,3 @@ loglevel = 'info'
 #acceslogformat ="%(h)s %(l)s %(u)s %(t)s %(r)s %(s)s %(b)s %(f)s %(a)s"
 acceslogformat ="%(f)s %(a)s"
 #errorlog =  '/var/log/gunicorn/apiredis.log'
-
-

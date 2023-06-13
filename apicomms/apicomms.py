@@ -59,6 +59,8 @@ class ApiComms(Resource):
             #app.logger.debug(f"DEBUG_DLGID={self.debug_unit_id}")
         else:
             app.logger.info(f"WARN XC001: No debug unit, Err=({r_conf.status_code}){r_conf.text}")
+            # Seteo uno por default.
+            _=requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/debugid", json={'debugid':'UDEBUG'}, timeout=10 )
 
     def __format_with_template__(self):
         '''
@@ -376,10 +378,12 @@ class ApiComms(Resource):
             jd_ordenes = r_data.json()
             d_ordenes = json.loads(jd_ordenes)
             ordenes = d_ordenes.get('ordenes','')
-            app.logger.info(f"CLASS={self.CLASS},ID={self.ID}, D_ORDENES={d_ordenes}")
+            if self.ID == self.debug_unit_id:
+                app.logger.info(f"CLASS={self.CLASS},ID={self.ID}, D_ORDENES={d_ordenes}")
         elif r_data.status_code == 204:
             # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-            app.logger.info(f"CLASS={self.CLASS},ID={self.ID},NO HAY RCD ORDENES")
+            if self.ID == self.debug_unit_id:
+                app.logger.info(f"CLASS={self.CLASS},ID={self.ID},NO HAY RCD ORDENES")
             ordenes = ''
         else:
             app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL LEER ORDENES. Err=({r_data.status_code}){r_data.text}")

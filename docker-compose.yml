@@ -2,25 +2,30 @@ version: '3.1'
 
 services:
 
+  appcomms:
+    image: ppeluffo/apicomms:latest
+    ports:
+      - 5000:5000
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.20:514"
+        tag: "APICOMMS" 
+        
   apiredis:
     image: ppeluffo/apiredis:latest
     ports:
-      - "5100:5100"
+      - 5100:5100
     logging:
       driver: "syslog"
       options:
         syslog-address: "udp://192.168.0.20:514"
         tag: "APICOMMS" 
 
-#  appcomms:
-#    image: ppeluffo/appcomms:latest
-#    ports:
-#      - "5000:5000"
-
   apiconf:
     image: ppeluffo/apiconf:latest
     ports:
-      - "5200:5200"
+      - 5200:5200
     logging:
       driver: "syslog"
       options:
@@ -30,13 +35,16 @@ services:
   redis:
     image: redis:alpine
 
-  timescale_db:
-    image: timescale/timescaledb:latest-pg14
+  pgsql:
+    image: ppeluffo/bd_apicomms:latest
+    restart: always
     ports:
       - 5432:5432
     environment:
-      POSTGRES_USER: postgres
+      POSTGRES_USER: admin
       POSTGRES_PASSWORD: pexco599
       POSTGRES_DB: bd_unidades
     volumes:
       - /datos:/var/lib/postgresql/data
+
+

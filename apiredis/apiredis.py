@@ -335,7 +335,7 @@ class Ordenes(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
         #
         if pk_ordenes is None:
-            app.logger.info( f'REDIS_WARN004: No ordenes rcd, code 204')
+            #app.logger.info( f'REDIS_WARN004: No ordenes rcd, code 204')
             return {},204   # NO CONTENT
         #
         ordenes = pickle.loads(pk_ordenes)
@@ -402,7 +402,7 @@ class OrdenesAtvise(Resource):
             return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
         #
         if pk_atvise is None:
-            app.logger.info( f'REDIS_WARN005: No pkordenes rcd, code 204')
+            #app.logger.info( f'REDIS_WARN005: No pkordenes rcd, code 204')
             return {},204   # NO CONTENT
         #
         ordenes_atvise = pickle.loads(pk_atvise)
@@ -587,6 +587,31 @@ class QueueItems(Resource):
         jd_resp = json.dumps(l_datos)
         return jd_resp, 200
     
+class Stats(Resource):
+
+    def get(self):
+        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+        try:
+            d_res = rh.hgetall( 'TIMESTAMP' )
+        except redis.ConnectionError:
+            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
+            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+        #
+        if d_res is None:
+            app.logger.info( f'REDIS_WARN004: No stats rcd, code 204')
+            return {},204   # NO CONTENT
+        #
+        d_timestamps = {}
+        for unitid in d_res:
+            pk_ts = d_res[unitid]
+            ts = pickle.loads(pk_ts)
+            if isinstance(unitid,bytes):
+                unitid=unitid.decode()
+            d_timestamps[unitid]= ts.strftime('%y-%m-%d %H:%M:%S')
+            
+        jd_timestamps = json.dumps(d_timestamps)
+        return jd_timestamps,200
+
 class Help(Resource):
 
     def get(self):
@@ -608,6 +633,7 @@ class Help(Resource):
             'PUT /apiredis/dataline?unit=DLGID': 'Actualiza los datos de ultima linea recibida (json PUT Body) y el timestamp',
             'GET /apiredis/queuelength?qname=<qn>': 'Devuelve el la cantidad de elementos de la cola',
             'GET /apiredis/queueitems?qname=<qn>&<count=nn>':'Devuelve count elementos de la cola',
+            'GET /apiredis/stats':'Devuelve todos los elementos en la lista TIMESTAMP',
         }
         return d_options, 200
 
@@ -623,6 +649,7 @@ api.add_resource( OrdenesAtvise, '/apiredis/ordenesatvise')
 api.add_resource( DataLine, '/apiredis/dataline')
 api.add_resource( QueueLength, '/apiredis/queuelength')
 api.add_resource( QueueItems, '/apiredis/queueitems')
+api.add_resource( Stats, '/apiredis/stats')
 
 # Lineas para que cuando corre desde gunicorn utilize el log handle de este
 # https://trstringer.com/logging-flask-gunicorn-the-manageable-way/

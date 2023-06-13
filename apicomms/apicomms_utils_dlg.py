@@ -294,10 +294,13 @@ class dlgutils:
         xhash = 0
         enable=self.d_local_conf.get('MODBUS',{}).get('ENABLE','FALSE')
         localaddr=int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR','1'))
-
-        hash_str = f'[{enable}:{localaddr:02d}]'
+        hash_str = f'[{enable},{localaddr:02d}]'
         xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
+        
+        #,
         for channel in ['M0','M1','M2','M3','M4']:
+            enable = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
             sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
             reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
@@ -306,9 +309,9 @@ class dlgutils:
             mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
             codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
             pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
-            hash_str = f'[{channel}:TRUE,{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
+            hash_str = f'[{channel}:{enable},{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
             xhash = self.u_hash(xhash, hash_str)
-            print(f'DEBUG HASH MODBUS: hash_str={hash_str}')
+            #print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
         #
         return xhash
 
