@@ -10,6 +10,7 @@ subproceso para c/u.
 Luego duerme 60s.
 '''
 
+import os
 import time
 import signal
 from multiprocessing import Process
@@ -20,17 +21,20 @@ import json
 from sqlalchemy import create_engine, exc
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
+import psycopg2
 
-#APIREDIS_HOST = 'apiredis'
-APIREDIS_HOST = '127.0.0.1'
-APIREDIS_PORT = '5100'
+MAX_DEQUEUE_ITEMS = int(os.environ.get('MAX_DEQUEUE_ITEMS',5))
+SLEEP_TIME = int(os.environ.get('SLEEP_TIME',60))
 
-#PGSQL_HOST = 'pgsql'
-PGSQL_HOST = '127.0.0.1'
-PGSQL_PORT = '5432'
-PGSQL_USER = 'admin'
-PGSQL_PASSWD = 'pexco599'
-PGSQL_BD = 'bd_spcomms'
+APIREDIS_HOST = os.environ.get('APIREDIS_HOST','apiredis')
+APIREDIS_PORT = os.environ.get('APIREDIS_PORT','5100')
+
+PGSQL_HOST = os.environ.get('PGSQL_HOST','pgsql')
+PGSQL_PORT = os.environ.get('PGSQL_PORT', '5432')
+PGSQL_USER = os.environ.get('PGSQL_USER', 'admin')
+PGSQL_PASSWD = os.environ.get('PGSQL_PASSWD','pexco599')
+PGSQL_BD = os.environ.get('PGSQL_BD', 'bd_spcomms')
+
 
 class BD_SQL_BASE:
 
@@ -45,7 +49,7 @@ class BD_SQL_BASE:
     def connect(self):
         # Engine
         try:
-            self.engine = create_engine(url=self.url, echo=False)
+            self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT")
         except SQLAlchemyError as err:
             print( f'PROCESS_ERR001: Pgsql engine error, HOST:{PGSQL_HOST} Err={err}')
             self.connected = False
@@ -53,6 +57,7 @@ class BD_SQL_BASE:
         # Connection
         try:
             self.conn = self.engine.connect()
+            self.conn.autocommit = True
         except SQLAlchemyError as err:
             print( f'CONFSQL_ERR002: Pgsql connection error, HOST:{PGSQL_HOST} Err={err}')
             self.connected = False
@@ -78,7 +83,7 @@ class BD_SQL_BASE:
             return False
         #
         try:
-            print(sql)
+            #print(sql)
             _ = self.conn.execute(query)
         except Exception as err_var:
             print( f"PROCESS: exec_sql, MSG: EXCEPTION: {err_var}")
@@ -104,17 +109,13 @@ class BD_SQL_BASE:
             # .strftime("%Y-%m-%d %H:%M:%S")
 
         # TABLA HISTORICA
-        sql = f"INSERT INTO historica ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{unit_id}','{key}','{value}')  ON CONFLICT DO NOTHING" 
-        if self.exec_sql(sql):
-            print(f"INSERT bdsql historica OK !! (unit={unit_id})")
-        else:
+        sql = f"INSERT INTO historica ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{unit_id}','{key}','{value}') ON CONFLICT DO NOTHING" 
+        if not self.exec_sql(sql):
             print(f"INSERT bdsql historica FAIL !! (unit={unit_id})")
         #
         # TABLA ONLINE
-        sql = f"INSERT INTO online ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{unit_id}','{key}','{value}')  ON CONFLICT DO NOTHING" 
-        if self.exec_sql(sql):
-            print(f"INSERT bdsql online OK !! (unit={unit_id})")
-        else:
+        sql = f"INSERT INTO online ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{unit_id}','{key}','{value}') ON CONFLICT DO NOTHING" 
+        if not self.exec_sql(sql):
             print(f"INSERT bdsql online FAIL !! (unit={unit_id})")
         #
 
@@ -126,12 +127,13 @@ def process_frames( protocolo, boundle_list ):
     Esta funcion recibe una lista con diccionarios de datos a insertar y
     hace las inserciones.
     '''
+    start_time = time.time()
     nro_items = len(boundle_list)
-    print(f"PROCESS: process_frames, PROTO:{protocolo}, ITEMS_LENGTH={nro_items}")
+    print(f"PROCESS: PROTO:{protocolo}, ITEMS={nro_items}")
     #
     bdsql = BD_SQL_BASE()
     if not bdsql.connect():
-        print('PROCESS: rocess_frames ERROR, bd_connect !!!')
+        print('PROCESS: process_frames ERROR, bd_connect !!!')
         return
     
     # Leo c/dict del bundle y lo proceso
@@ -146,7 +148,7 @@ def process_frames( protocolo, boundle_list ):
         if ddate and dtime:
             datetime = f'{ddate} {dtime}'
 
-        print(f"PROCESS: process_frames, PROTO{protocolo}, D_LINE={d_line}")
+        print(f"PROCESS: PROTO:{protocolo}, D_LINE={d_line}")
         for key in d_line:
             value = d_line[key]
             msg = f'{protocolo},{unit_id},{datetime},{key}=>{value}'
@@ -155,7 +157,8 @@ def process_frames( protocolo, boundle_list ):
             bdsql.insert_raw( unit_id, key, value, datetime)
         #
     #
-    print(f"PROCESS: process_frames {protocolo} EXIT")
+    elapsed = (time.time() - start_time)
+    print(f"PROCESS: process_frames {protocolo} EXIT. (elapsed={elapsed})")
     sys.stdout.flush()
 
 def read_data_queue_length():
@@ -190,12 +193,19 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, clt_C_handler)
 
+    print("APICOMMS PROCESS Starting...Waiting 60 secs....")
+    print(f'-SLEEP_TIME={SLEEP_TIME}')
+    print(f'-MAX_DEQUEUE_ITEMS={MAX_DEQUEUE_ITEMS}')
+    print(f'-APIREDIS={APIREDIS_HOST}/{APIREDIS_PORT}')
+    print(f'-PGSQL_HOST={PGSQL_HOST}/{PGSQL_PORT}')
+
+
     # Espero para siempre
     while True:
         # Leo el tamaño de la cola de RXDATA_QUEUE.
         if read_data_queue_length() > 0:
             # Si hay datos leo la cola, los leo
-            l_datos = read_data_queue(3)
+            l_datos = read_data_queue( MAX_DEQUEUE_ITEMS )
             dlg_list = []
             plc_list = []
             # Separo los datos de c/tipo en una lista distinta
@@ -219,5 +229,5 @@ if __name__ == '__main__':
                 p2.start()
         #
         #
-        time.sleep(60)
+        time.sleep(SLEEP_TIME)
     #

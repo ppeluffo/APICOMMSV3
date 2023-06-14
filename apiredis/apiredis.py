@@ -84,9 +84,9 @@ from flask_restful import Resource, Api, reqparse
 app = Flask(__name__)
 api = Api(app)
 
-BDREDIS_HOST = 'redis'
-BDREDIS_PORT = '6379'
-BDREDIS_DB = '0'
+BDREDIS_HOST = os.environ.get('BDREDIS_HOST','redis')
+BDREDIS_PORT = os.environ.get('BDREDIS_PORT','6379')
+BDREDIS_DB = os.environ.get('BDREDIS_DB','0')
 
 class Ping(Resource):
     '''
@@ -100,7 +100,7 @@ class Ping(Resource):
             return {'rsp':'OK', 'REDIS_HOST':BDREDIS_HOST, 'REDIS_PORT':BDREDIS_PORT },200
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            return {'rsp':'FAIL', 'REDIS_HOST':BDREDIS_HOST, 'REDIS_PORT':BDREDIS_PORT }, 500
 
 class DeleteRcd(Resource):
     
@@ -379,6 +379,31 @@ class Ordenes(Resource):
         jd_resp = json.dumps(d_resp)
         return jd_resp,200
 
+    def delete(self):
+        ''' Borra las ordenes para la unidad
+            Invocacion: /apiredis/ordenes?unit=DLGID
+
+            Testing:
+            d={'ordenes':'Reset;Apagar;Prender'}
+            jd=json.dumps(d)
+            req=requests.del('http://127.0.0.1:5100/apiredis/ordenes', params={'unit':'DLGTEST'}, json=jd)
+            json.loads(req.json())
+
+        '''
+        parser = reqparse.RequestParser()
+        parser.add_argument('unit',type=str,location='args',required=True)
+        args=parser.parse_args()
+        #
+        #app.logger.debug(f'Ordenes/Put DBUG: ordenes={ordenes}')
+        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+        try:
+            _ = rh.hset( args['unit'], 'PKORDENES', '' )
+        except redis.ConnectionError:
+            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
+            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+        #
+        return {'Rsp':'OK'},200
+    
 class OrdenesAtvise(Resource):
 
     def get(self):
@@ -442,6 +467,27 @@ class OrdenesAtvise(Resource):
         jd_resp = json.dumps(d_resp)
         return jd_resp,200
 
+    def delete(self):
+        ''' Delete ordenes de atvise para la unidad
+            NO CHEQUEA EL FORMATO
+
+            Testing:
+            req=requests.del('http://127.0.0.1:5100/apiredis/ordenesatvise', params={'unit':'PLCTEST'})
+
+        '''
+        parser = reqparse.RequestParser()
+        parser.add_argument('unit',type=str,location='args',required=True)
+        args=parser.parse_args()
+        #
+        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+        try:
+            _ = rh.hset( args['unit'],'PKATVISE','')
+        except redis.ConnectionError:
+            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
+            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+        #
+        return {'Rsp':'OK'},200
+    
 class DataLine(Resource):
 
     # Retorna un diccionario con la ultima linea
@@ -660,6 +706,8 @@ if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
+
+    app.logger.info( f'Starting APIREDIS: REDIS_HOST={BDREDIS_HOST}, REDIS_PORT={BDREDIS_PORT}' )
 
 
 # Lineas para cuando corre en modo independiente

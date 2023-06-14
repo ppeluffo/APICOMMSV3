@@ -16,12 +16,12 @@ import apicomms_utils_plc
 app = Flask(__name__)
 api = Api(app)
 
-APIREDIS_HOST = 'apiredis'
-APIREDIS_PORT = '5100'
-
-APICONF_HOST = 'apiconf'
-APICONF_PORT = '5200'
+APIREDIS_HOST = os.environ.get('APIREDIS_HOST', 'apiredis')
+APIREDIS_PORT = os.environ.get('APIREDIS_PORT', '5100')
+APICONF_HOST = os.environ.get('APICONF_HOST', 'apiconf')
+APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
             
+
 class ApiComms(Resource):
     ''' 
     Clase especializada en atender los dataloggers y PLCs
@@ -669,24 +669,25 @@ class Ping(Resource):
             if r_conf.status_code == 200:
                 redis_status = 'OK'
         except requests.exceptions.RequestException as err: 
-            app.logger.info(f"ERROR XC001: request exception, Err:{err}")
+            app.logger.info(f"ERROR XC001: Redis request exception,[{APIREDIS_HOST}:{APIREDIS_PORT}] Err:{err}")
         #
         # Pruebo la conexion a SQL
         sql_status = 'ERR'
         try:
             r_conf = requests.get(f"http://{APICONF_HOST}:{APICONF_PORT}/apiconf/ping",timeout=10 )
+            if r_conf.status_code == 200:
+                sql_status = 'OK'
         except requests.exceptions.RequestException as err: 
-            app.logger.info(f"ERROR XC001: request exception, Err:{err}")
+            app.logger.info(f"ERROR XC001: Sql request exception,[{APICONF_HOST}:{APICONF_PORT}] Err:{err}")
         #
-        if r_conf.status_code == 200:
-            sql_status = 'OK'
         #
         if redis_status == 'OK' and sql_status == 'OK':
             ping_status = 'OK'
         else:
-            ping_status = 'ERR'
+            ping_status = 'FAIL'
             
-        return {'rsp':ping_status, 'redis_status': redis_status, 'sql_status':sql_status }, 200
+        return {'Rsp':f'{ping_status}, API_REDIS={APIREDIS_HOST}:{APIREDIS_PORT}, API_CONF:{APICONF_HOST}:{APICONF_PORT}'}, 200
+
 
 class Help(Resource):
     '''
@@ -705,6 +706,9 @@ if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
+
+    app.logger.info( f'Starting APICOMMS: REDIS_HOST={APIREDIS_HOST}, REDIS_PORT={APIREDIS_PORT}' )
+    app.logger.info( f'         APICOMMS: CONF_HOST={APICONF_HOST}, CONF_PORT={APICONF_PORT}' )
 
 if __name__ == '__main__':
     APIREDIS_HOST = '127.0.0.1'

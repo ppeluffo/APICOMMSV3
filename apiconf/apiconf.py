@@ -24,14 +24,14 @@ from flask_restful import Resource, Api, reqparse
 from apiconf_templates import DLG_CONF_TEMPLATE
 from collections.abc import MutableMapping
 
-PGSQL_HOST = 'pgsql'
-PGSQL_PORT = '5432'
-PGSQL_USER = 'admin'
-PGSQL_PASSWD = 'pexco599'
-PGSQL_BD = 'bd_spcomms'
+PGSQL_HOST = os.environ.get('PGSQL_HOST', 'pgsql')
+PGSQL_PORT = os.environ.get('PGSQL_PORT','5432')
+PGSQL_USER = os.environ.get('PGSQL_USER', 'admin')
+PGSQL_PASSWD = os.environ.get('PGSQL_PASSWD', 'pexco599')
+PGSQL_BD = os.environ.get('PGSQL_BD','bd_spcomms')
 
-APICONF_HOST = 'apiconf'
-APICONF_PORT = '5200'
+APICONF_HOST = os.environ.get('APICONF_HOST','apiconf')
+APICONF_PORT = os.environ.get('APICONF_PORT','5200')
 
 app = Flask(__name__)
 api = Api(app)
@@ -321,18 +321,17 @@ class Ping(Resource):
             self.engine = create_engine(url=url, echo=True)
         except SQLAlchemyError as err:
             app.logger.info( f'CONFSQL_ERR001: Pgsql engine error, HOST:{PGSQL_HOST} Err={err}')
-            return {'Err':f'Psql engine error:{PGSQL_HOST}/{PGSQL_PORT}'}, 500 
+            return {'rsp':'FAIL', 'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT }, 500 
         # Connection
         try:
             self.conn = self.engine.connect()
         except SQLAlchemyError as err:
             app.logger.info( f'CONFSQL_ERR002: Pgsql connection error, HOST:{PGSQL_HOST} Err={err}')
-            return {'Err':f'Pgsql connection error:{PGSQL_HOST}/{PGSQL_PORT}'}, 503
+            return {'rsp':'FAIL', 'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT }, 503
     
         print("Connected to PGSQL!")
         self.conn.close()
         return {'rsp':'OK', 'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT },200
-
 
 api.add_resource( Ping, '/apiconf/ping')
 api.add_resource( Help, '/apiconf/help')
@@ -345,6 +344,8 @@ if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
+
+    app.logger.info( f'Starting APICONF: SQL_HOST={PGSQL_HOST}, SQL_PORT={PGSQL_PORT}' )
 
 if __name__ == '__main__':
     PGSQL_HOST = '127.0.0.1'

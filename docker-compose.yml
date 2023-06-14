@@ -3,7 +3,7 @@ version: '3.1'
 services:
 
   appcomms:
-    image: ppeluffo/apicomms:latest
+    image: spymovil/apicomms:latest
     ports:
       - 5000:5000
     logging:
@@ -11,19 +11,17 @@ services:
       options:
         syslog-address: "udp://192.168.0.20:514"
         tag: "APICOMMS" 
-        
-  apiredis:
-    image: ppeluffo/apiredis:latest
-    ports:
-      - 5100:5100
-    logging:
-      driver: "syslog"
-      options:
-        syslog-address: "udp://192.168.0.20:514"
-        tag: "APICOMMS" 
+    depends_on:
+      - apiredis
+      - apiconf
+    environment:
+      APIREDIS_HOST: apiredis
+      APIREDIS_PORT: 5100
+      APICONF_HOST: apiconf
+      APICONF_PORT: 5200
 
   apiconf:
-    image: ppeluffo/apiconf:latest
+    image: spymovil/apiconf:latest
     ports:
       - 5200:5200
     logging:
@@ -31,12 +29,40 @@ services:
       options:
         syslog-address: "udp://192.168.0.20:514"
         tag: "APICOMMS"
+    depends_on:
+      - pgsql
+      - redis
+    environment:
+      PGSQL_HOST: pgsql
+      PGSQL_PORT: 5432
+      PGSQL_USER: admin
+      PGSQL_PASSWD: pexco599
+      PGSQL_BD: bd_spcomms
+      APICONF_HOST: apiconf
+      APICONF_PORT: 5200
+
+  apiredis:
+    image: spymovil/apiredis:latest
+    ports:
+      - 5100:5100
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.20:514"
+        tag: "APICOMMS" 
+    depends_on:
+      - redis
+    environment:
+      BDREDIS_HOST: redis
+      BDREDIS_PORT: 6379
+      BDREDIS_DB: 0
 
   redis:
     image: redis:alpine
+    restart: always
 
   pgsql:
-    image: ppeluffo/bd_apicomms:latest
+    image: spymovil/bd_apicomms:latest
     restart: always
     ports:
       - 5432:5432
@@ -46,5 +72,28 @@ services:
       POSTGRES_DB: bd_unidades
     volumes:
       - /datos:/var/lib/postgresql/data
+
+  process:
+    image: spymovil/process:latest
+    restart: always
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.20:514"
+        tag: "APICOMMS"
+    depends_on:
+      - pgsql
+      - redis
+    environment:
+      APIREDIS_HOST: apiredis
+      APIREDIS_PORT: 5100
+      PGSQL_HOST: pgsql
+      PGSQL_PORT: 5432
+      PGSQL_USER: admin
+      PGSQL_PASSWD: pexco599
+      PGSQL_BD: bd_spcomms
+      MAX_DEQUEUE_ITEMS: 10
+      SLEEP_TIME: 60
+      
 
 

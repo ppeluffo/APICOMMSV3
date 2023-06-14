@@ -11,15 +11,10 @@ RUN cp /usr/share/zoneinfo/America/Montevideo /etc/localtime
 RUN echo "America/Montevideo" >  /etc/timezone
 RUN date 
 
-WORKDIR /apiconf
-COPY gunicorn.conf.py .
-COPY wsgi.py .
-COPY entrypoint.sh .
+WORKDIR /process
+COPY process.py .
 
-COPY apiconf_templates.py .
-COPY apiconf.py .
-RUN chmod 777 /apiconf/*
+RUN chmod 777 /process/*
 
-ENTRYPOINT ["sh", "entrypoint.sh"]
+CMD ["python3", "/process/process.py"]
 
-EXPOSE 5200
