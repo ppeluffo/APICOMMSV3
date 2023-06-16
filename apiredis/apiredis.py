@@ -4,6 +4,14 @@
 Testing c/gunicorn:
 gunicorn --bind=0.0.0.0:8000 --log-level=debug wsgi:app
 
+-----------------------------------------------------------------------------
+R001 @ 2023-06-14 (commsv3_apiredis:1.1)
+- Se modifican las respuestas de modo que se respondan con objetos json y
+  no strings.
+- Se normalizan los mensajes de error.
+- Se agregan try a los manejos con pickle
+- Se normalizan las respuestas.
+
 
 Version 1.1 @ 2023-05-23:
 -------------------------
@@ -54,7 +62,7 @@ Notas de desarrollo:
    Flask 1.1 automaticamente jasonifica los diccionarios en las respuestas por lo que no se necesita.
 
 ERRORES:
-REDIS_ERR001: Redis not connected
+ApiREDIS_ERR001: Redis not connected
 ERROR R002: No UID in request_json_data
 ERROR R003: No UNIT ID in request_json_data
 ERROR R004: No ordenes in request_json_data
@@ -69,7 +77,7 @@ WARN_R002: No debug_unit rcd
 WARN_R003: No uid2dlgi rcd
 WARN_R004: No ordenes rcd
 WARN_R005: No pkordenes rcd
-
+WARN R006: No dataline rcd
 '''
 
 import os
@@ -88,6 +96,8 @@ BDREDIS_HOST = os.environ.get('BDREDIS_HOST','redis')
 BDREDIS_PORT = os.environ.get('BDREDIS_PORT','6379')
 BDREDIS_DB = os.environ.get('BDREDIS_DB','0')
 
+API_VERSION = 'R001 @ 2023-06-14'
+
 class Ping(Resource):
     '''
     Devuelve el estado de la conexion a la BD Redis.
@@ -97,10 +107,12 @@ class Ping(Resource):
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB, socket_connect_timeout=1)
         try:
             rh.ping()
-            return {'rsp':'OK', 'REDIS_HOST':BDREDIS_HOST, 'REDIS_PORT':BDREDIS_PORT },200
+            d_rsp = {'rsp':'OK','version':API_VERSION,'REDIS_HOST':BDREDIS_HOST,'REDIS_PORT':BDREDIS_PORT }
+            return d_rsp,200
         except redis.ConnectionError:
-            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'rsp':'FAIL', 'REDIS_HOST':BDREDIS_HOST, 'REDIS_PORT':BDREDIS_PORT }, 500
+            app.logger.info( f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
+            d_rsp = {'rsp':'FAIL','version':API_VERSION,'REDIS_HOST':BDREDIS_HOST,'REDIS_PORT':BDREDIS_PORT }
+            return d_rsp, 500
 
 class DeleteRcd(Resource):
     
@@ -121,10 +133,11 @@ class DeleteRcd(Resource):
         try:
             _=rh.delete(args['unit'])
         except redis.ConnectionError:
-            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            app.logger.info( f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
+            d_rsp = {'rsp':'FAIL', 'REDIS_HOST':BDREDIS_HOST, 'REDIS_PORT':BDREDIS_PORT }
+            return d_rsp, 500
         #
-        return {'unit':args['unit'], 'Rsp':'Deleted'}, 200
+        return {'rsp':'OK'}, 200
 
 class Config(Resource):
 
@@ -148,17 +161,21 @@ class Config(Resource):
             pk_config = rh.hget( args['unit'], 'PKCONFIG')
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         if pk_config is None:
             app.logger.info( f'REDIS_WARN001: No configuration rcd')
             return {},204   # NO CONTENT
         #
         # En la redis la configuracion es un dict serializado en bytestring
-        # Lo paso a un json
-        d_config = pickle.loads(pk_config)
-        jd_config = json.dumps(d_config)
-        return jd_config,200
+        try:
+            d_config = pickle.loads(pk_config)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle loads error'}
+            return d_rsp, 409
+        #
+        return d_config,200
    
     def put(self):
         ''' Actualiza(override) la configuracion para la unidad
@@ -174,18 +191,26 @@ class Config(Resource):
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
         #
-        jd_config = request.get_json()
-        d_config = json.loads(jd_config)
-        pk_config = pickle.dumps(d_config)
+        d_params = request.get_json()
+        if not isinstance(d_params, dict):
+            d_rsp = {'rsp':'Error', 'msg': f'No es una instancia de dict.'}
+            return d_rsp, 406
+        
+        try:
+            pk_config = pickle.dumps(d_params)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle dumps error'}
+            return d_rsp, 409
         #
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
             _ = rh.hset( args['unit'],'PKCONFIG', pk_config)
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
-        return jd_config, 200
+        return {'rsp':'OK'}, 200
 
 class DebugId(Resource):
 
@@ -204,15 +229,15 @@ class DebugId(Resource):
             debug_id = rh.hget('SPCOMMS', 'DEBUG_ID')
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         if debug_id is None:
             app.logger.info( f'REDIS_WARN002: No debug_unit rcd, code 204')
             return {},204   # NO CONTENT
         #
         d_resp = {'debugid': debug_id.decode() }
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        return d_resp, 200
     
     def put(self):
         ''' 
@@ -226,19 +251,24 @@ class DebugId(Resource):
         json.loads(req.json())
         '''
         #
-        d_data = request.get_json()
-        print(f'DEBUG:{d_data}')
-        if 'debugid' not in d_data:
-            app.logger.info('REDIS_ERR004: No debugid in request_json_data')
-            return {'Err':'No debugid'}, 406
+        d_params = request.get_json()
+        if not isinstance(d_params, dict):
+            d_rsp = {'rsp':'Error', 'msg': f'No es una instancia de dict.'}
+            return d_rsp, 406
         #
-        debugid = d_data['debugid']
+        if 'debugid' not in d_params:
+            app.logger.info('REDIS_ERR004: No debugid in request_json_data')
+            d_rsp = {'rsp':'Error', 'msg': f'No debugid key.'}
+            return d_rsp, 406
+        #
+        debugid = d_params.get('debugid','UNKNOWN')
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
             _ = rh.hset('SPCOMMS', 'DEBUG_ID', debugid )
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         return {'Rsp':'OK'},200
     
@@ -332,16 +362,23 @@ class Ordenes(Resource):
             pk_ordenes = rh.hget( args['unit'], 'PKORDENES' )
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            jd_rsp = json.dumps(d_rsp)
+            return jd_rsp, 500
         #
         if pk_ordenes is None:
             #app.logger.info( f'REDIS_WARN004: No ordenes rcd, code 204')
             return {},204   # NO CONTENT
         #
-        ordenes = pickle.loads(pk_ordenes)
+        try:
+            ordenes = pickle.loads(pk_ordenes)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle loads error'}
+            return d_rsp, 409
+        
         d_resp = {'ordenes': ordenes }
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        #jd_resp = json.dumps(d_resp)
+        return d_resp,200
 
     def put(self):
         ''' Actualiza(override) las ordenes para la unidad
@@ -361,23 +398,31 @@ class Ordenes(Resource):
         args=parser.parse_args()
         #
         d_params = request.get_json()
+        if not isinstance(d_params, dict):
+            d_rsp = {'rsp':'Error', 'msg': f'No es una instancia de dict.'}
+            return d_rsp, 406
+        #
         if 'ordenes' not in d_params:
             app.logger.info('REDIS_ERR004: No ordenes in request_json_data')
-            return {'Err':'No ordenes'}, 406
-        #
-        ordenes = d_params['ordenes']
-        #app.logger.debug(f'Ordenes/Put DBUG: ordenes={ordenes}')
+            d_rsp = {'rsp':'Error', 'msg': f'No ordenes key.'}
+            return d_rsp, 406
+        
+        ordenes = d_params.get('ordenes','')
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
             pk_ordenes = pickle.dumps(ordenes)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle dumps error'}
+            return d_rsp, 409
+        #
+        try:
             _ = rh.hset( args['unit'], 'PKORDENES', pk_ordenes )
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
-        d_resp = {'ordenes': ordenes }
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        return {'Rsp':'OK'},200
 
     def delete(self):
         ''' Borra las ordenes para la unidad
@@ -386,7 +431,7 @@ class Ordenes(Resource):
             Testing:
             d={'ordenes':'Reset;Apagar;Prender'}
             jd=json.dumps(d)
-            req=requests.del('http://127.0.0.1:5100/apiredis/ordenes', params={'unit':'DLGTEST'}, json=jd)
+            req=requests.del('http://127.0.0.1:5100/apiredis/ordenes', params={'unit':'DLGTEST'})
             json.loads(req.json())
 
         '''
@@ -397,10 +442,11 @@ class Ordenes(Resource):
         #app.logger.debug(f'Ordenes/Put DBUG: ordenes={ordenes}')
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            _ = rh.hset( args['unit'], 'PKORDENES', '' )
+            _ = rh.hdel( args['unit'], 'PKORDENES' )
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         return {'Rsp':'OK'},200
     
@@ -424,16 +470,21 @@ class OrdenesAtvise(Resource):
             pk_atvise = rh.hget( args['unit'],'PKATVISE')
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         if pk_atvise is None:
             #app.logger.info( f'REDIS_WARN005: No pkordenes rcd, code 204')
             return {},204   # NO CONTENT
         #
-        ordenes_atvise = pickle.loads(pk_atvise)
+        try:
+            ordenes_atvise = pickle.loads(pk_atvise)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle loads error'}
+            return d_rsp, 409
+        #
         d_resp = {'ordenes_atvise': ordenes_atvise }
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        return d_resp,200
 
     def put(self):
         ''' Actualiza(override) la configuracion de ordenes de atvise para la unidad
@@ -450,22 +501,30 @@ class OrdenesAtvise(Resource):
         args=parser.parse_args()
         #
         d_params = request.get_json()
+        if not isinstance(d_params, dict):
+            d_rsp = {'rsp':'Error', 'msg': f'No es una instancia de dict.'}
+            return d_rsp, 406
+
         if 'ordenes_atvise' not in d_params:
             app.logger.info('REDIS_ERR005: No ordenes atvise in request_json_data')
             return {'Err':'No ordenes'}, 406
         #
-        ordenes_atvise = d_params['ordenes_atvise']
+        ordenes_atvise = d_params.get('ordenes_atvise','')
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
             pk_ordenes_atvise = pickle.dumps(ordenes_atvise)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle dumps error'}
+            return d_rsp, 409
+        #
+        try: 
             _ = rh.hset( args['unit'],'PKATVISE', pk_ordenes_atvise)
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
-        d_resp = {'ordenes_atvise': ordenes_atvise }
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        return {'Rsp':'OK'},200
 
     def delete(self):
         ''' Delete ordenes de atvise para la unidad
@@ -481,10 +540,11 @@ class OrdenesAtvise(Resource):
         #
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            _ = rh.hset( args['unit'],'PKATVISE','')
+            _ = rh.hdel( args['unit'],'PKATVISE')
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         return {'Rsp':'OK'},200
     
@@ -509,16 +569,21 @@ class DataLine(Resource):
             pk_dline = rh.hget( args['unit'], 'PKLINE')
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         if pk_dline is None:
-            app.logger.info( f'REDIS_ERR006: No dataline rcd, code 204')
+            #app.logger.info( f'REDIS_WARN006: No dataline rcd, code 204')
             return {},204   # NO CONTENT
         #
-        # En la redis la configuracion es un dict serializado.
-        d_data = pickle.loads(pk_dline)
-        jd_resp = json.dumps(d_data)
-        return jd_resp,200
+        # En la redis la configuracion es un dict serializado.        
+        try:
+            d_data = pickle.loads(pk_dline)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle loads error'}
+            return d_rsp, 409
+        #
+        return d_data,200
 
     def put(self):
         ''' Actualiza(override) la ultima linea eviada por la unidad.
@@ -539,16 +604,20 @@ class DataLine(Resource):
         args=parser.parse_args()
         #
         # get_json() convierte el objeto JSON a un python dict: lo serializo pickle
-        d_params = request.get_json()    
+        d_params = request.get_json()
+        if not isinstance(d_params, dict):
+            d_rsp = {'rsp':'Error', 'msg': f'No es una instancia de dict.'}
+            return d_rsp, 406  
         #
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
-        # Actualizamos el registro PKLINE
         try:
+            # Actualizamos el registro PKLINE
             pk_line = pickle.dumps(d_params) # Es un bytearray
             _ = rh.hset( args['unit'],'PKLINE', pk_line )
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         # Actualizamos la tabla con los timestamps en cada linea nueva que insertamos.
         timestamp = dt.datetime.now()
@@ -557,15 +626,20 @@ class DataLine(Resource):
         #
         # Encolamos en RXDATA_QUEUE
         d_persistent = {'TYPE':args['type'], 'ID':args['unit'], 'D_LINE':d_params}
-        pk_d_persistent = pickle.dumps(d_persistent)
+        try:
+            pk_d_persistent = pickle.dumps(d_persistent)
+        except Exception:
+            d_rsp = {'rsp':'Error', 'msg': f'pickle dumps error'}
+            return d_rsp, 409
+        #
         try:
             _ = rh.rpush( 'RXDATA_QUEUE', pk_d_persistent)
         except redis.ConnectionError:
             app.logger.debug( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
-        jd_resp = json.dumps(d_persistent)
-        return jd_resp,200
+        return {'Rsp':'OK'},200
     
 class QueueLength(Resource):
     
@@ -586,16 +660,16 @@ class QueueLength(Resource):
         try:
             qlength = rh.llen(args['qname'])
         except redis.ConnectionError:
-            app.logger.debug( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            return d_rsp, 500
         #
         if qlength is None:
             app.logger.info( f'REDIS_ERR007: No qlength rcd, code 204')
             return {},204   # NO CONTENT
         #
         d_resp =  {'qname': args['qname'], 'length': qlength}
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        return d_resp,200
     
 class QueueItems(Resource):
     
@@ -618,7 +692,9 @@ class QueueItems(Resource):
             l_pkdatos = rh.lpop(args['qname'], args['count'])
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            #jd_rsp = json.dumps(d_rsp)
+            return d_rsp, 500
         #
         if l_pkdatos is None:
             app.logger.info( f'REDIS_ERR008: No l_pkdatos rcd, code 204')
@@ -627,11 +703,14 @@ class QueueItems(Resource):
         # Des-serializo los elementos de la lista.
         l_datos = []
         for i in l_pkdatos:
-            l_datos.append( pickle.loads(i))
-
-        #return jsonify(l_datos)
-        jd_resp = json.dumps(l_datos)
-        return jd_resp, 200
+            try:
+                l_datos.append( pickle.loads(i))
+            except Exception:
+                d_rsp = {'rsp':'Error', 'msg': f'pickle loads error'}
+                return d_rsp, 409
+        #
+        d_rsp = { 'ldatos':l_datos}
+        return d_rsp, 200
     
 class Stats(Resource):
 
@@ -641,7 +720,9 @@ class Stats(Resource):
             d_res = rh.hgetall( 'TIMESTAMP' )
         except redis.ConnectionError:
             app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            d_rsp = {'rsp':'Error', 'msg': f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}
+            #jd_rsp = json.dumps(d_rsp)
+            return d_rsp, 500
         #
         if d_res is None:
             app.logger.info( f'REDIS_WARN004: No stats rcd, code 204')
@@ -650,13 +731,17 @@ class Stats(Resource):
         d_timestamps = {}
         for unitid in d_res:
             pk_ts = d_res[unitid]
-            ts = pickle.loads(pk_ts)
+            try:
+                ts = pickle.loads(pk_ts)
+            except Exception:
+                d_rsp = {'rsp':'Error', 'msg': f'pickle loads error'}
+                return d_rsp, 409
+            
             if isinstance(unitid,bytes):
                 unitid=unitid.decode()
             d_timestamps[unitid]= ts.strftime('%y-%m-%d %H:%M:%S')
             
-        jd_timestamps = json.dumps(d_timestamps)
-        return jd_timestamps,200
+        return d_timestamps,200
 
 class Help(Resource):
 
@@ -667,6 +752,7 @@ class Help(Resource):
             'GET /apiredis/ping': 'Indica el estado de la api.',
             'DELETE /apiredis/delete?unit=DLGID':'Borra la configuracion de la unit',
             'GET /apiredis/debugid': 'Retorna el unitID usado para debug',
+            'PUT /apiredis/debugid': 'Setea el unitID usado para debug',
             'GET /apiredis/config?unit=DLGID':'Retorna la configuracion de la unit',
             'PUT /apiredis/config?unit=DLGID': 'Actualiza la configuracion de la unit',
             'GET /apiredis/uid2id?uid=<uid>': 'Retorna el DLGID asociado al UID',
@@ -683,6 +769,23 @@ class Help(Resource):
         }
         return d_options, 200
 
+class Test(Resource):
+
+    def get(self):
+        d_rsp = {'KIYU001': [('HTQ1', 'ALTURA_TANQUE_KIYU_1'), ('HTQ2', 'ALTURA_TANQUE_KIYU_2')],
+                 'SJOSE001': [('PA', 'PRESION_ALTA_SJ1'), ('PB', 'PRESION_BAJA_SQ1')],
+                 'VALOR1':1.23,
+                 'VALOR2':-34.5}
+        jd_rsp = json.dumps(d_rsp)
+        return d_rsp, 200
+    
+    def put(self):
+        d_params = request.get_json()
+        print(f'DEBUG:{d_params}')
+        td = type(d_params)
+        print(f'DEBUG_TYPE:{td}')
+        return {'Rsp':'OK', 'type':td},200
+
 
 api.add_resource( Help, '/apiredis/help')
 api.add_resource( Ping, '/apiredis/ping')
@@ -696,6 +799,7 @@ api.add_resource( DataLine, '/apiredis/dataline')
 api.add_resource( QueueLength, '/apiredis/queuelength')
 api.add_resource( QueueItems, '/apiredis/queueitems')
 api.add_resource( Stats, '/apiredis/stats')
+api.add_resource( Test, '/apiredis/test')
 
 # Lineas para que cuando corre desde gunicorn utilize el log handle de este
 # https://trstringer.com/logging-flask-gunicorn-the-manageable-way/
@@ -713,5 +817,6 @@ if __name__ != '__main__':
 # Lineas para cuando corre en modo independiente
 if __name__ == '__main__':
     BDREDIS_HOST = '127.0.0.1'
-    app.run(host='0.0.0.0', port=5100, debug=False)
+    BDREDIS_PORT = 6379
+    app.run(host='0.0.0.0', port=5100, debug=True)
 

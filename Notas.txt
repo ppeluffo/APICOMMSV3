@@ -71,3 +71,7 @@ server {
 Reiniciamos el servicio:
 systemctl start nginx
 
+A) Remover imagenes huerfanas (none)
+docker rmi $(docker image ls | grep none | cut -c 46-60)
+
+B) 

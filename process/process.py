@@ -8,6 +8,12 @@ arma 2 listas: uno para SPX y otro para PLC
 Pone los elementos correspondientes en c/lista e invoca a un
 subproceso para c/u.
 Luego duerme 60s.
+
+-----------------------------------------------------------------------------
+R001 @ 2023-06-15 (commsv3_process:1.1)
+- Se manejan todos los parámetros por variables de entorno
+
+
 '''
 
 import os
@@ -16,12 +22,11 @@ import signal
 from multiprocessing import Process
 import sys
 import datetime as dt 
-import requests
 import json
-from sqlalchemy import create_engine, exc
+import requests
+from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-import psycopg2
 
 MAX_DEQUEUE_ITEMS = int(os.environ.get('MAX_DEQUEUE_ITEMS',5))
 SLEEP_TIME = int(os.environ.get('SLEEP_TIME',60))
@@ -35,6 +40,7 @@ PGSQL_USER = os.environ.get('PGSQL_USER', 'admin')
 PGSQL_PASSWD = os.environ.get('PGSQL_PASSWD','pexco599')
 PGSQL_BD = os.environ.get('PGSQL_BD', 'bd_spcomms')
 
+VERSION = 'R001 @ 2023-06-15'
 
 class BD_SQL_BASE:
 
@@ -139,8 +145,7 @@ def process_frames( protocolo, boundle_list ):
     # Leo c/dict del bundle y lo proceso
     for d_data in boundle_list:
         unit_id = d_data.get('id','0000')
-        jd_line = d_data.get('d_line',{})
-        d_line = json.loads(jd_line)
+        d_line = d_data.get('d_line',{})
         ddate = d_line.pop('DATE',None)
         dtime = d_line.pop('TIME',None)
 
@@ -148,7 +153,7 @@ def process_frames( protocolo, boundle_list ):
         if ddate and dtime:
             datetime = f'{ddate} {dtime}'
 
-        print(f"PROCESS: PROTO:{protocolo}, D_LINE={d_line}")
+        print(f"PROCESS: PROTO:{protocolo},ID={unit_id},D_LINE={d_line}")
         for key in d_line:
             value = d_line[key]
             msg = f'{protocolo},{unit_id},{datetime},{key}=>{value}'
@@ -169,7 +174,7 @@ def read_data_queue_length():
         return -1
     
     if r_conf.status_code == 200:
-        d = json.loads(r_conf.json())
+        d = r_conf.json()
         queue_length = d.get('length',-1)
         return queue_length
     
@@ -185,13 +190,17 @@ def read_data_queue(count):
     if r_conf.status_code != 200:
         return []
     
-    # Cada elemento es del tipo: {'TYPE':args['type'], 'ID':args['unit'], 'D_LINE':d_params}
-    l_datos = json.loads(r_conf.json())
+    # Cada elemento es del tipo: {'TYPE':args['type'], 'ID':args['unit'], 'D_LINE':d_params}.
+    d_resp = r_conf.json()
+    l_datos = d_resp.get('ldatos',[])
     return l_datos
           
 if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, clt_C_handler)
+
+    #APIREDIS_HOST = '127.0.0.1'
+    #PGSQL_HOST = '127.0.0.1'
 
     print("APICOMMS PROCESS Starting...Waiting 60 secs....")
     print(f'-SLEEP_TIME={SLEEP_TIME}')
@@ -203,9 +212,12 @@ if __name__ == '__main__':
     # Espero para siempre
     while True:
         # Leo el tamaño de la cola de RXDATA_QUEUE.
-        if read_data_queue_length() > 0:
+        qlength = read_data_queue_length()
+        #print(f'DEBUG QLENGTH={qlength}')
+        if  qlength > 0:
             # Si hay datos leo la cola, los leo
             l_datos = read_data_queue( MAX_DEQUEUE_ITEMS )
+            #print(f'DEBUG: L_DATOS={l_datos}')
             dlg_list = []
             plc_list = []
             # Separo los datos de c/tipo en una lista distinta

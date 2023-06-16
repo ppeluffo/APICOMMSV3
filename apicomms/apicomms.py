@@ -1,6 +1,15 @@
 #!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
+
+-----------------------------------------------------------------------------
+R001 @ 2023-06-15: (commsv3_apicomms:1.1)
+- Se modifica el procesamiento de frames de modo que al procesar uno de DATA sea
+  como los PING, no se lee la configuracion ya que no se necesita y genera carga
+  innecesaria.
+- Se manejan todos los parámetros por variables de entorno
+- Se agrega un entrypoint 'ping' que permite ver si la api esta operativa
+
 '''
 
 import os
@@ -21,6 +30,7 @@ APIREDIS_PORT = os.environ.get('APIREDIS_PORT', '5100')
 APICONF_HOST = os.environ.get('APICONF_HOST', 'apiconf')
 APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
             
+API_VERSION = 'R001 @ 2023-06-15'
 
 class ApiComms(Resource):
     ''' 
@@ -47,18 +57,18 @@ class ApiComms(Resource):
         Consulta el nombre del equipo que debe logearse.
         '''
         try:
-            r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/debugid", timeout=10 )
+            rsp = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/debugid", timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err={err}")
             self.debug_unit_id = None
             return
         
-        if r_conf.status_code == 200:
-            d = json.loads(r_conf.json())
-            self.debug_unit_id = d['debugid']
+        if rsp.status_code == 200:
+            d = rsp.json()
+            self.debug_unit_id = d.get('debugid','UDEBUG')
             #app.logger.debug(f"DEBUG_DLGID={self.debug_unit_id}")
         else:
-            app.logger.info(f"WARN XC001: No debug unit, Err=({r_conf.status_code}){r_conf.text}")
+            app.logger.info(f"WARN XC001: No debug unit, Err=({rsp.status_code}){rsp.text}")
             # Seteo uno por default.
             _=requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/debugid", json={'debugid':'UDEBUG'}, timeout=10 )
 
@@ -82,12 +92,12 @@ class ApiComms(Resource):
             return False
         #
         if r_conf.status_code == 200:
-            self.d_conf = json.loads(r_conf.json())
+            self.d_conf = r_conf.json()
             if self.ID == self.debug_unit_id:
                 app.logger.info(f"INFO ID={self.args['ID']}, REDIS D_CONF={self.d_conf}")
             return True
         else:
-            app.logger.info(f"ERROR XC006: No puede leer de Redis, ID={self.args['ID']}, Err=({r_conf.status_code}){r_conf.text}")
+            app.logger.info(f"WARN XC006: No Rcd en Redis, ID={self.args['ID']}, Err=({r_conf.status_code}){r_conf.text}")
         #
         # Intento leer desde SQL
         try:
@@ -120,12 +130,12 @@ class ApiComms(Resource):
             return False
         #
         # La api sql me devuelve un json
-        jd_conf = r_conf.json()
-        self.d_conf = json.loads(jd_conf)
+        d_conf = r_conf.json()
+        self.d_conf = d_conf
         app.logger.info(f"INFO ID={self.args['ID']}: SQL D_CONF={self.d_conf}")
         # Actualizo la redis.
         try:
-            r_conf = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/config", params={'unit':self.args['ID']}, json=jd_conf, timeout=10 )
+            r_conf = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/config", params={'unit':self.args['ID']}, json=d_conf, timeout=10 )
         except requests.exceptions.RequestException as err: 
             app.logger.info(f"ERROR XC001: request exception, Err:{err}")
             return False
@@ -366,27 +376,26 @@ class ApiComms(Resource):
             return 'ERROR:UNKNOWN VERSION',200
 
         # 1) Guardo los datos
-        r_data = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/dataline", params={'unit':self.ID,'type':'DLG'}, json=json.dumps(d_payload), timeout=10 )
-        if r_data.status_code != 200:
+        r_datos = requests.put(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/dataline", params={'unit':self.ID,'type':'DLG'}, json=d_payload, timeout=10 )
+        if r_datos.status_code != 200:
             # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-            app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL GUARDAR DATA EN REDIS. Err=({r_data.status_code}){r_data.text}")
+            app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL GUARDAR DATA EN REDIS. Err=({r_datos.status_code}){r_datos.text}")
         #
         # 3) Leo las ordenes
-        r_data = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes", params={'unit':self.ID }, timeout=10 )
+        r_ordenes = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes", params={'unit':self.ID }, timeout=10 )
         d_ordenes = None
-        if r_data.status_code == 200:
-            jd_ordenes = r_data.json()
-            d_ordenes = json.loads(jd_ordenes)
+        if r_ordenes.status_code == 200:
+            d_ordenes = r_ordenes.json()
             ordenes = d_ordenes.get('ordenes','')
             if self.ID == self.debug_unit_id:
                 app.logger.info(f"CLASS={self.CLASS},ID={self.ID}, D_ORDENES={d_ordenes}")
-        elif r_data.status_code == 204:
+        elif r_ordenes.status_code == 204:
             # Si da error genero un mensaje pero continuo para no trancar al datalogger.
             if self.ID == self.debug_unit_id:
                 app.logger.info(f"CLASS={self.CLASS},ID={self.ID},NO HAY RCD ORDENES")
             ordenes = ''
         else:
-            app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL LEER ORDENES. Err=({r_data.status_code}){r_data.text}")
+            app.logger.error(f"CLASS={self.CLASS},ID={self.ID},ERROR AL LEER ORDENES. Err=({r_ordenes.status_code}){r_ordenes.text}")
             ordenes = ''
         #
         # 3.1) Si RESET entonces borro la configuracion
@@ -394,6 +403,9 @@ class ApiComms(Resource):
             _ = requests.delete(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/delete", params={'unit':self.ID}, timeout=10 )
             app.logger.info(f"CLASS={self.CLASS},ID={self.ID}, DELETE REDIS RCD.")
         #
+        # 3.2) Borro las ordenes
+        _ = requests.delete(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenes", params={'unit':self.ID}, timeout=10 )
+
         # 4) Respondo
         now=dt.datetime.now().strftime('%y%m%d%H%M')
         self.GET_response = f'CLASS=DATA&CLOCK={now};{ordenes}'
@@ -429,7 +441,10 @@ class ApiComms(Resource):
         if self.CLASS == 'PING':
             return self.__process_ping__()
 
-        # Leo la configuracion
+        if self.CLASS == 'DATA':
+            return self.__process_data__()
+        
+        # Leo la configuracion porque lo requieren las otras clases
         if not self.__read_configuration__():
             self.GET_response = 'CONFIG_ERROR'
             self.GET_response_status_code = 200
@@ -452,9 +467,6 @@ class ApiComms(Resource):
         if self.CLASS == 'CONF_MODBUS':
             return self.__process_conf_modbus__()
         
-        if self.CLASS == 'DATA':
-            return self.__process_data__()
-
         self.GET_response = 'ERROR:UNKNOWN FRAME TYPE'
         self.GET_response_status_code = 200
         self.__format_response__()
@@ -544,12 +556,11 @@ class ApiComms(Resource):
                 app.logger.info(f"ERROR XC001: request exception, Err={err}")
                 return
             #
-            if r_data.status_code != 200:
-                d_remote_datalines[unit_id] = {}
-                # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-                app.logger.info(f"ERROR XC003: No se puede leer dataline, ID={self.args['ID']},Err=({r_data.status_code}){r_data.text}")
+            if r_data.status_code == 200:
+                 d_remote_datalines[unit_id] = json.loads(r_data.json())
             else:
-                d_remote_datalines[unit_id] = json.loads(r_data.json())
+                app.logger.info(f'WARN XC003: No {unit_id} dataline, Err=({r_data.status_code}){r_data.text}')
+                d_remote_datalines[unit_id] = {}
         #
         if self.ID == self.debug_unit_id:
             app.logger.info(f'INFO PLC_ID={self.ID}, d_remote_datalines={d_remote_datalines}')
@@ -589,7 +600,7 @@ class ApiComms(Resource):
             app.logger.info(f"INFO PLC_ID={self.args['ID']}, NO HAY ORDENES DE ATVISE")
         else:
             d_atvise_responses = {}
-            app.logger.info(f"ERROR XC004: No puede leerse ordenes Atvise, PLC_ID={self.args['ID']}, Err=({r_data.status_code}){r_data.text}")
+            app.logger.info(f"ERROR XC004: No puede leerse ordenes Atvise, PLC_ID={self.args['ID']}, Err=({r_atvise.status_code}){r_atvise.text}")
         #
         # Paso 3)
         # Junto todas las variables de la respuesta en un solo diccionario
@@ -651,8 +662,13 @@ class ApiComms(Resource):
         #sresp = b'PLC respuesta de Spymovil'
         #sresp = b'\n\x0bf\xe6\xf6Bb\x04W\x02\xecq\xe4C:\x16\x00\x00\x00\x00\x00\x0b\xa3'
         #
+        # La funcion make_response es de FLASK !!!
+
         response = make_response(sresp)
         response.headers['Content-type'] = 'application/binary'
+
+        if self.ID == self.debug_unit_id:
+            app.logger.info(f"INFO: RSP2PLC={sresp}")
         return response
 
 class Ping(Resource):
@@ -686,8 +702,7 @@ class Ping(Resource):
         else:
             ping_status = 'FAIL'
             
-        return {'Rsp':f'{ping_status}, API_REDIS={APIREDIS_HOST}:{APIREDIS_PORT}, API_CONF:{APICONF_HOST}:{APICONF_PORT}'}, 200
-
+        return {'Rsp':f'{ping_status}','version':API_VERSION, 'API_REDIS':f'{APIREDIS_HOST}:{APIREDIS_PORT}','API_CONF':f'{APICONF_HOST}:{APICONF_PORT}' }, 200
 
 class Help(Resource):
     '''
@@ -714,4 +729,3 @@ if __name__ == '__main__':
     APIREDIS_HOST = '127.0.0.1'
     APICONF_HOST = '127.0.0.1'
     app.run(host='0.0.0.0', port=5000, debug=True)
-

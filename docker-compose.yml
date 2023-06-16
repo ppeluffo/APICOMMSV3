@@ -3,13 +3,13 @@ version: '3.1'
 services:
 
   appcomms:
-    image: spymovil/apicomms:latest
+    image: spymovil/commsv3_apicomms:latest
     ports:
       - 5000:5000
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://192.168.0.20:514"
+        syslog-address: "udp://127.0.0.1:514"
         tag: "APICOMMS" 
     depends_on:
       - apiredis
@@ -21,34 +21,52 @@ services:
       APICONF_PORT: 5200
 
   apiconf:
-    image: spymovil/apiconf:latest
+    image: spymovil/commsv3_apiconf:latest
     ports:
       - 5200:5200
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://192.168.0.20:514"
+        syslog-address: "udp://127.0.0.1:514"
         tag: "APICOMMS"
     depends_on:
       - pgsql
-      - redis
     environment:
       PGSQL_HOST: pgsql
       PGSQL_PORT: 5432
       PGSQL_USER: admin
       PGSQL_PASSWD: pexco599
       PGSQL_BD: bd_spcomms
-      APICONF_HOST: apiconf
-      APICONF_PORT: 5200
+      MAX_CHUNK_SIZE: 10
+
+  apidatos:
+    image: spymovil/commsv3_apidatos:latest
+    ports:
+      - 5300:5300
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://127.0.0.1:514"
+        tag: "APICOMMS"
+    depends_on:
+      - pgsql
+    environment:
+      PGSQL_HOST: pgsql
+      PGSQL_PORT: 5432
+      PGSQL_USER: admin
+      PGSQL_PASSWD: pexco599
+      PGSQL_BD: bd_spcomms
+      APIDATOS_HOST: apidatos
+      APIDATOS_PORT: 5300
 
   apiredis:
-    image: spymovil/apiredis:latest
+    image: spymovil/commsv3_apiredis:latest
     ports:
       - 5100:5100
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://192.168.0.20:514"
+        syslog-address: "udp://127.0.0.1:514"
         tag: "APICOMMS" 
     depends_on:
       - redis
@@ -62,24 +80,24 @@ services:
     restart: always
 
   pgsql:
-    image: spymovil/bd_apicomms:latest
+    image: spymovil/commsv3_bd_apicomms:latest
     restart: always
     ports:
       - 5432:5432
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: pexco599
-      POSTGRES_DB: bd_unidades
+      POSTGRES_DB: bd_spcomms
     volumes:
       - /datos:/var/lib/postgresql/data
 
   process:
-    image: spymovil/process:latest
+    image: spymovil/commsv3_process:latest
     restart: always
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://192.168.0.20:514"
+        syslog-address: "udp://127.0.0.1:514"
         tag: "APICOMMS"
     depends_on:
       - pgsql

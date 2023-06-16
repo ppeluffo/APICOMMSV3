@@ -108,4 +108,31 @@ DLG_CONF_TEMPLATE = {
     }
 }
 
+PLC_CONF_TEMPLATE = {
+    '1.1.0': { 'MEMBLOCK':{'RCVD_MBK_DEF': [
+                              ['UPA1_CAUDALIMETRO', 'float', 0],['UPA1_STATE1', 'uchar', 1],['UPA1_POS_ACTUAL_6', 'short', 8],
+                              ['UPA2_CAUDALIMETRO', 'float', 0],['BMB_STATE18', 'uchar', 1],['BMB_STATE19', 'uchar', 1]
+                            ],
+             'SEND_MBK_DEF': [
+                              ['UPA1_ORDER_1', 'short', 1],['UPA1_CONSIGNA_6', 'short', 2560],['ESP_ORDER_8', 'short', 200],
+                              ['ALTURA_TANQUE_KIYU_1', 'float', 2560],['ALTURA_TANQUE_KIYU_2', 'float', 2560],
+                              ['PRESION_ALTA_SJ1', 'float', 0],['PRESION_BAJA_SQ1', 'float', 0]
+                            ],
+             'RCVD_MBK_LENGTH':15,
+             'SEND_MBK_LENGTH':24
+                },
+
+            'REMVARS':{
+                'DLG001': [
+                    ('HTQ1', 'ALTURA_TANQUE_KIYU_1'), 
+                    ('HTQ2', 'ALTURA_TANQUE_KIYU_2')
+                    ],
+                'DLG002': [
+                    ('PA', 'PRESION_ALTA_SJ1'), 
+                    ('PB', 'PRESION_BAJA_SQ1')
+                    ]
+                }
+            }
+}
+
 
