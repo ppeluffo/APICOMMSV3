@@ -58,7 +58,7 @@ class BD_SQL_BASE:
         try:
             self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT")
         except SQLAlchemyError as err:
-            app.logger.info( f'DATOS ERR001: Pgsql engine error, HOST:{PGSQL_HOST} Err={err}')
+            app.logger.info( f'(200) ApiDATOS_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             self.connected = False
             return False 
         # Connection
@@ -66,7 +66,7 @@ class BD_SQL_BASE:
             self.conn = self.engine.connect()
             self.conn.autocommit = True
         except SQLAlchemyError as err:
-            app.logger.info( f'DATOS ERR002: Pgsql connection error, HOST:{PGSQL_HOST} Err={err}')
+            app.logger.info( f'(201) ApiDATOS_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             self.connected = False
             return False
         #
@@ -79,22 +79,23 @@ class BD_SQL_BASE:
         # Retorna un resultProxy o None
         if not self.connected:
             if not self.connect():
-                app.logger.info( f'DATOS ERR003: exec_sql connection ERROR: {err}')
+                app.logger.info( f'(202) ApiDATOS_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}')
                 return {'res':False }
         #
         try:
             query = text(sql)
-        except Exception as err_var:
-            app.logger.info( f'DATOS ERR004: exec_sql query ERROR: {sql}')
-            app.logger.info( f'DATOS ERR004: exec_sql query EXCEPTION: {err_var}')
+        except Exception as err:
+            app.logger.info( f'(203) ApiDATOS_ERR003: Sql query error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{sql}')
+            app.logger.info( f'(204) ApiDATOS_ERR004: Sql query exception, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             return {'res':False }
         #
         try:
             #print(sql)
             rp = self.conn.execute(query)
         except Exception as err:
-            app.logger.info( f'DATOS ERR003: exec_sql execute ERROR: {err}')
+            app.logger.info( f'(205) ApiDATOS_ERR005: Sql exec error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             return {'res':False }
+        #
         return {'res':True,'rp':rp }
 
     def insert_user(self, user_id):
@@ -106,7 +107,7 @@ class BD_SQL_BASE:
         sql = f"INSERT INTO usuarios ( user_id, fechaUltimoAcceso, data_ptr ) VALUES ('{user_id}', '{dnow}','0') ON CONFLICT DO NOTHING" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
-            app.logger.info( f'DATOS ERR005: insert_user FAIL')
+            app.logger.info( '(206) ApiDATOS_ERR006: insert_user FAIL')
         return d_res
     
     def read_user(self, user_id):
@@ -116,7 +117,7 @@ class BD_SQL_BASE:
         sql = f"SELECT fechaUltimoAcceso, data_ptr FROM usuarios WHERE user_id = '{user_id}'" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
-            app.logger.info( f'DATOS ERR005: select_user FAIL')
+            app.logger.info( '(207) ApiDATOS_ERR007: select_user FAIL')
         return d_res
         #
 
@@ -127,7 +128,7 @@ class BD_SQL_BASE:
         sql = f"DELETE FROM usuarios WHERE user_id = '{user_id}'" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
-            app.logger.info( f'DATOS ERR006: delete_user FAIL')
+            app.logger.info( '(208) ApiDATOS_ERR008: delete_user FAIL')
         return d_res
 
     def read_data_chunk(self, data_ptr):
@@ -137,7 +138,7 @@ class BD_SQL_BASE:
         sql = f"SELECT * FROM online WHERE id > '{data_ptr}' ORDER by id LIMIT {MAX_CHUNK_SIZE}" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
-            app.logger.info( f'DATOS ERR005: select_user FAIL')
+            app.logger.info( '(209) ApiDATOS_ERR009: read data chunk FAIL')
         return d_res
 
     def update_user(self, user_id, pk):
@@ -148,7 +149,7 @@ class BD_SQL_BASE:
         sql = f"UPDATE usuarios SET data_ptr = '{pk}', fechaUltimoAcceso = '{dnow}' WHERE user_id = '{user_id}'" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
-            app.logger.info( f'DATOS ERR007: update_user FAIL')
+            app.logger.info( '(210) ApiDATOS_ERR010: update user FAIL')
         return d_res
 
 class Ping(Resource):
@@ -160,14 +161,17 @@ class Ping(Resource):
         try:
             self.engine = create_engine(url=url, echo=True)
         except SQLAlchemyError as err:
-            app.logger.info( f'SQL_ERR001: Pgsql engine error, HOST:{PGSQL_HOST} Err={err}')
-            return {'rsp':'FAIL','version':API_VERSION,'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT }, 500 
+            app.logger.info( f'(211) ApiDATOS_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiDATOS_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            return d_rsp, 500
+         
         # Connection
         try:
             self.conn = self.engine.connect()
         except SQLAlchemyError as err:
-            app.logger.info( f'SQL_ERR002: Pgsql connection error, HOST:{PGSQL_HOST} Err={err}')
-            return {'rsp':'FAIL','version':API_VERSION,'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT }, 503
+            app.logger.info( f'(212) ApiDATOS_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiDATOS_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            return d_rsp, 500
     
         print("Connected to PGSQL!")
         self.conn.close()
@@ -185,7 +189,7 @@ class Usuarios(Resource):
         bdsql = BD_SQL_BASE()
         d_res = bdsql.insert_user(user_id)
         if not d_res.get('res',False):
-            return {'rsp':'Error', 'msg':'Error en pgsql'},500
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
         #
         return {'user_id':user_id},200
         
@@ -199,7 +203,7 @@ class Usuarios(Resource):
         bdsql = BD_SQL_BASE()
         d_res =  bdsql.read_user(args['user'])
         if not d_res.get('res',False):
-            return {'rsp':'Error', 'msg':'Error en pgsql'},500
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
         #
         rp = d_res.get('rp',None)
         if rp.rowcount == 0:
@@ -221,7 +225,7 @@ class Usuarios(Resource):
         bdsql = BD_SQL_BASE()
         d_res =  bdsql.delete_user(args['user'])
         if not d_res.get('res',False):
-            return {'rsp':'Error', 'msg':'Error en pgsql'},500
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
         #
         rp = d_res.get('rp',None)
         if rp.rowcount == 0:
@@ -244,7 +248,7 @@ class Datos(Resource):
         d_res =  bdsql.read_user(args['user'])
         # Error
         if not d_res.get('res',False):
-            return {'rsp':'Error','msg':'Error en pgsql'},500
+            return {'rsp':'ERROR','msg':'Error en pgsql'},500
         #
         rp = d_res.get('rp',None)
         # No existe usuario
@@ -258,7 +262,7 @@ class Datos(Resource):
         # Leo un chunk de datos desde el ultimo enviado
         d_res = bdsql.read_data_chunk(data_ptr)
         if not d_res.get('res',False):
-            return {'rsp':'Error', 'msg':'Error en pgsql'},500
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
         #
         rp = d_res.get('rp',None)
         # No hat datos

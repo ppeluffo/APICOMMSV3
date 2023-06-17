@@ -10,6 +10,14 @@ subproceso para c/u.
 Luego duerme 60s.
 
 -----------------------------------------------------------------------------
+R001 @ 2023-06-17 (commsv3_process:1.2)
+- Hago modificaciones para hacer insert bulk en la pgsql en vez de insertar
+  de a 1 fila.
+  Modifico 'process_frames' para que genere una lista de tuplas con los valores
+  a insertar
+  Creo la funcion 'insert_bulk' para que haga los inserts.
+
+-----------------------------------------------------------------------------
 R001 @ 2023-06-15 (commsv3_process:1.1)
 - Se manejan todos los parámetros por variables de entorno
 
@@ -28,7 +36,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 
-MAX_DEQUEUE_ITEMS = int(os.environ.get('MAX_DEQUEUE_ITEMS',5))
+MAX_DEQUEUE_ITEMS = int(os.environ.get('MAX_DEQUEUE_ITEMS',100))
 SLEEP_TIME = int(os.environ.get('SLEEP_TIME',60))
 
 APIREDIS_HOST = os.environ.get('APIREDIS_HOST','apiredis')
@@ -40,7 +48,7 @@ PGSQL_USER = os.environ.get('PGSQL_USER', 'admin')
 PGSQL_PASSWD = os.environ.get('PGSQL_PASSWD','pexco599')
 PGSQL_BD = os.environ.get('PGSQL_BD', 'bd_spcomms')
 
-VERSION = 'R001 @ 2023-06-15'
+VERSION = 'R001 @ 2023-06-17'
 
 class BD_SQL_BASE:
 
@@ -55,17 +63,18 @@ class BD_SQL_BASE:
     def connect(self):
         # Engine
         try:
-            self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT")
+            #self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT")
+            self.engine = create_engine(url=self.url, echo=False )
         except SQLAlchemyError as err:
-            print( f'PROCESS_ERR001: Pgsql engine error, HOST:{PGSQL_HOST} Err={err}')
+            print( f'(300) PROCESS_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             self.connected = False
             return False 
         # Connection
         try:
             self.conn = self.engine.connect()
-            self.conn.autocommit = True
+            #self.conn.autocommit = True
         except SQLAlchemyError as err:
-            print( f'CONFSQL_ERR002: Pgsql connection error, HOST:{PGSQL_HOST} Err={err}')
+            print( f'(301) PROCESS_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             self.connected = False
             return False
         #
@@ -78,21 +87,21 @@ class BD_SQL_BASE:
         # Retorna un resultProxy o None
         if not self.connected:
             if not self.connect():
-                print({ 'PROCESS: exec_sql: ERROR: No hay conexion a BD. Exit !!'})
+                print( f'(302) PROCESS_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
                 return False
         #
         try:
             query = text(sql)
-        except Exception as err_var:
-            print( f"PROCESS: query_sql, MSG: ERROR SQLQUERY: {sql}")
-            print( f"PROCESS: query_sql, MSG: EXCEPTION: {err_var}")
+        except Exception as err:
+            print( f'(303) PROCESS_ERR003: Sql query error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{sql}')
+            print( f'(304) PROCESS_ERR004: Sql query exception, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             return False
         #
         try:
             #print(sql)
             _ = self.conn.execute(query)
-        except Exception as err_var:
-            print( f"PROCESS: exec_sql, MSG: EXCEPTION: {err_var}")
+        except Exception as err:
+            print( f'(305) PROCESS_ERR005: Sql exec error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             return False
         return True
 
@@ -117,13 +126,50 @@ class BD_SQL_BASE:
         # TABLA HISTORICA
         sql = f"INSERT INTO historica ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{unit_id}','{key}','{value}') ON CONFLICT DO NOTHING" 
         if not self.exec_sql(sql):
-            print(f"INSERT bdsql historica FAIL !! (unit={unit_id})")
+            print(f"(306) PROCESS_ERR008: INSERT bdsql historica FAIL !! (unit={unit_id})")
         #
         # TABLA ONLINE
         sql = f"INSERT INTO online ( fechadata,fechasys,equipo,tag,valor) VALUES ('{datetime}', '{dnow}','{unit_id}','{key}','{value}') ON CONFLICT DO NOTHING" 
         if not self.exec_sql(sql):
-            print(f"INSERT bdsql online FAIL !! (unit={unit_id})")
+            print(f"(307) PROCESS_ERR009; INSERT bdsql online FAIL !! (unit={unit_id})")
         #
+
+    def insert_bulk(self, l_tuples):
+        '''
+        No controlo el largo de l_ntuples !!!.
+        Si MAX_DEQUEUE_ITEMS = 100 y c/frame tiene 4 variables, entonces l_tuples es de 400 elementos.
+        Hay que sintonizar la pgsq para que acepte esto.
+        En forma estándard acepta meter hasta 50 inserts juntos.!!!
+        '''
+        # Debo hacer chunks de N(50) inserts
+        step = 50
+        for i in range(0, len(l_tuples), step):
+            x = i
+            chunk = l_tuples[x:x+step]
+
+            # TABLA HISTORICA
+            sql_historica = f"INSERT INTO historica ( fechadata,fechasys,equipo,tag,valor) VALUES " 
+            sql_online = f"INSERT INTO online ( fechadata,fechasys,equipo,tag,valor) VALUES " 
+            for t in chunk:
+                sql_historica += f'{t},'
+                sql_online += f'{t},'
+            # Remuevo el ultimo ,
+            sql_historica = sql_historica[:-1]
+            sql_historica += " ON CONFLICT DO NOTHING" 
+            sql_online = sql_online[:-1]
+            sql_online += " ON CONFLICT DO NOTHING" 
+
+            print(f'DEBUG: SQL={sql_online}')
+            print(f'Chunk {i}')
+            if not self.exec_sql(sql_historica):
+                print(f"(30x) PROCESS_ERR008: BULK INSERT bdsql historica FAIL.")
+            self.exec_sql('COMMIT')
+            #
+            if not self.exec_sql(sql_online):
+                print(f"(30x) PROCESS_ERR008: BULK INSERT bdsql online FAIL.")
+            self.exec_sql('COMMIT')      
+            #
+            
 
 def clt_C_handler(signum, frame):
     sys.exit(0)
@@ -139,38 +185,47 @@ def process_frames( protocolo, boundle_list ):
     #
     bdsql = BD_SQL_BASE()
     if not bdsql.connect():
-        print('PROCESS: process_frames ERROR, bd_connect !!!')
+        print('(308) PROCESS_ERR010: process_frames ERROR, bd_connect !!!')
         return
     
     # Leo c/dict del bundle y lo proceso
+    l_tuples = []
+    sfechasys = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for d_data in boundle_list:
         unit_id = d_data.get('id','0000')
         d_line = d_data.get('d_line',{})
         ddate = d_line.pop('DATE',None)
         dtime = d_line.pop('TIME',None)
-
-        datetime = None        
+        sfechadata = None        
         if ddate and dtime:
-            datetime = f'{ddate} {dtime}'
+            sfechadata = f'{ddate} {dtime}'
+            fechadata = dt.datetime.strptime(sfechadata, '%y%m%d %H%M%S')
+            sfechadata = fechadata.strftime("%Y-%m-%d %H:%M:%S")
 
-        print(f"PROCESS: PROTO:{protocolo},ID={unit_id},D_LINE={d_line}")
+        else:
+            sfechadata = sfechasys
+
+        #print(f"(309) PROCESS INFO: PROTO:{protocolo},ID={unit_id},D_LINE={d_line}")
+        
         for key in d_line:
             value = d_line[key]
-            msg = f'{protocolo},{unit_id},{datetime},{key}=>{value}'
+            #msg = f'{protocolo},{unit_id},{datetime},{key}=>{value}'
             #print( f"PROCESS: process_frames, MSG:{msg}")
             #
-            bdsql.insert_raw( unit_id, key, value, datetime)
+            #bdsql.insert_raw( unit_id, key, value, datetime)
+            l_tuples.append( (sfechadata, sfechasys, unit_id, key, value) )
         #
     #
+    bdsql.insert_bulk(l_tuples)
     elapsed = (time.time() - start_time)
-    print(f"PROCESS: process_frames {protocolo} EXIT. (elapsed={elapsed})")
+    print(f"(310) PROCESS INFO: process_frames({len(l_tuples)}) {protocolo} END. (elapsed={elapsed})")
     sys.stdout.flush()
 
 def read_data_queue_length():
     try:
         r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/queuelength", params={'qname':'RXDATA_QUEUE'}, timeout=10 )
     except requests.exceptions.RequestException as err: 
-        print(f"ERROR XC001: request exception, Err={err}")
+        print(f"(311) PROCESS_ERR006: queuelength request exception, Err={err}")
         return -1
     
     if r_conf.status_code == 200:
@@ -184,7 +239,7 @@ def read_data_queue(count):
         params = {'qname':'RXDATA_QUEUE', 'count':count }
         r_conf = requests.get(f"http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/queueitems", params=params, timeout=10 )
     except requests.exceptions.RequestException as err: 
-        print(f"ERROR XC001: request exception, Err={err}")
+        print(f"(312) PROCESS_ERR007: queuedata request exception, Err={err}")
         return []
     
     if r_conf.status_code != 200:
@@ -199,8 +254,8 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, clt_C_handler)
 
-    #APIREDIS_HOST = '127.0.0.1'
-    #PGSQL_HOST = '127.0.0.1'
+    APIREDIS_HOST = '127.0.0.1'
+    PGSQL_HOST = '127.0.0.1'
 
     print("APICOMMS PROCESS Starting...Waiting 60 secs....")
     print(f'-SLEEP_TIME={SLEEP_TIME}')

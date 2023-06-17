@@ -358,7 +358,7 @@ class dlgutils:
         if self.ifw_ver == 110:
             return self.__process_data_V110__(app, d_payload)
         #
-        print("ERROR: Version no soportada")  
+        print("(459) ApiCOMMS_ERR010: Version no soportada")  
         return None
         
     def __process_data_V110__(self, app, d_args):

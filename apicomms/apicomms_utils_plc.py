@@ -115,7 +115,7 @@ class Memblock:
         self.rx_payload = rx_payload
         self.rx_payload_length = len(self.rx_payload)
         if self.debug:
-            self.app.logger.info( f'ID={self.plcid}, FUNC=load_rx_payload, rx_payload=({self.rx_payload_length})[{self.rx_payload}]')
+            self.app.logger.info( f'(460) ApiCOMMS_INFO: ID={self.plcid},rx_payload=({self.rx_payload_length})[{self.rx_payload}]')
 
     def get_d_rx_payload(self):
         '''
@@ -145,7 +145,7 @@ class Memblock:
         # 3) Calculo los componentes del memblock de recepcion (formato,largo, lista de nombres)
         sformat, _ , var_names = self.__process_mbk__(self.rcvd_mbk_def)
         if self.debug:
-            self.app.logger.info( f'convert_bytes2dict: RXVD_MBK_DEF={self.rcvd_mbk_def}')
+            self.app.logger.info( f'(461) ApiCOMMS_INFO: ID={self.plcid}, convert_bytes2dict: RXVD_MBK_DEF={self.rcvd_mbk_def}')
         #
         # 4) Desempaco los datos recibidos del PLC de acuerdo al formato dado (del RCVD_MBK)
         # RCVD_MBK es una lista porque importa el orden de las variables !!!
@@ -153,7 +153,7 @@ class Memblock:
         try:
             t_vals = unpack_from(sformat, self.rx_payload)
         except ValueError as err:
-            self.app.logger.error( f'ID={self.plcid}, FUNC=convert_bytes2dict, ERROR: NO PUEDO UNPACK !! sformat={sformat}, rx_payload=[{self.rx_payload}], error={err}' )
+            self.app.logger.error( f'(462) ApiCOMMS_ERR011: No puedo UNPACK, ID={self.plcid}, sformat={sformat}, rx_payload=[{self.rx_payload}], error={err}' )
             return False
         #
         # 5) Genero una namedtuple con los valores anteriores y los nombres de las variables
@@ -162,13 +162,13 @@ class Memblock:
         try:
             rx_tuple = t_names._make(t_vals)
         except ValueError:
-            self.app.logger.error( 'ID={self.plcid}, FUNC=convert_bytes2dict, ERROR:NO PUEDO GENERAR LA TUPLA DE LOS VALORES.!!' )
+            self.app.logger.error( f'(463) ApiCOMMS_ERR012: No puedo generar tupla de valores, ID={self.plcid}' )
             return False
         #
         # La convierto a diccionario
         self.d_rx_payload = rx_tuple._asdict()
         if self.debug:
-            self.app.logger.info(  f'ID={self.plcid}, FUNC=convert_bytes2dict, d_rx_payload={self.d_rx_payload}' )
+            self.app.logger.info(  f'(464) ApiCOMMS_INFO: ID={self.plcid}, convert_bytes2dict,d_rx_payload={self.d_rx_payload}' )
         return True
  
     def convert_dict2bytes( self, plcid, d_responses ):
@@ -190,15 +190,15 @@ class Memblock:
         #
         # En d_payload tengo todas las variables definidas en el send_mbk con sus valores reales o x defecto
         if self.debug:
-            self.app.logger.info(  f'ID={self.plcid}, FUNC=convert_dict2bytes, d_tx_payload={d_tx_payload}' )
+            self.app.logger.info(  f'(465) ApiCOMMS_INFO: ID={self.plcid}, convert_dict2bytes,d_tx_payload={d_tx_payload}' )
         #
         # Convierto el diccionario a una namedtuple (template)
         # SEND_MBK es una lista porque importa el orden de las variables !!!.
         sformat, largo, var_names = self.__process_mbk__(self.send_mbk_def) 
         ntuple = namedtuple('nt', d_tx_payload.keys())(*d_tx_payload.values())
         if self.debug:
-            self.app.logger.info(  f'ID={self.plcid}, FUNC=convert_dict2bytes, sformat={sformat}' )
-            self.app.logger.info(  f'ID={self.plcid}, FUNC=convert_dict2bytes, ntuple={ntuple}' )
+            self.app.logger.info(  f'(466) ApiCOMMS_INFO: ID={self.plcid}, convert_dict2bytes,sformat={sformat}' )
+            self.app.logger.info(  f'(467) ApiCOMMS_INFO: ID={self.plcid}, onvert_dict2bytes,ntuple={ntuple}' )
         #
         # Convierto los valores de la ntuple a los tipos definidos en el mbk
         # Si el valor es un string y el tipo es 'h' lo convierto a int
@@ -214,25 +214,24 @@ class Memblock:
                         x = float(x)
                 list_values.append(x)
             except Exception as ex:
-                self.app.logger.debug(  f'ID={self.plcid}, FUNC=convert_dict2bytes, ERROR idx={idx} x={x} type(x)={type(x)} sformat[idf]={sformat[idf]} ntuple[idx]={ntuple[idx]}, Err={ex}' )
+                self.app.logger.debug(  f'(468) ApiCOMMS_ERR013: No puedo armar respuesta. ID={self.plcid},idx={idx},x={x},type(x)={type(x)},sformat[idf]={sformat[idf]} ntuple[idx]={ntuple[idx]},Err={ex}' )
                 continue
         #
         if self.debug:
-            self.app.logger.info(  f'ID={self.plcid}, FUNC=convert_dict2bytes, list_values={list_values}' )
+            self.app.logger.info(  f'(469) ApiCOMMS_INFO: ID={self.plcid},convert_dict2bytes,list_values={list_values}' )
         #
         # Convierto la ntuple a un bytearray serializado 
         try:
             # self.tx_bytestream = pack( sformat, *ntuple)   
             self.tx_bytestream = pack( sformat, *list_values)      
         except Exception as ex:
-            self.app.logger.debug(  f'ID={self.plcid}, FUNC=convert_dict2bytes, ERROR CONVERT NTUPLE {ntuple}, Err={ex}' )
-            self.app.logger.debug(  f'ID={self.plcid}, FUNC=convert_dict2bytes, tx_bytestream={self.tx_bytestream}' )
+            self.app.logger.debug(  f'(470) ApiCOMMS_ERR014: No puedo convertir tupla. ID={self.plcid}, {ntuple},Err={ex}' )
+            self.app.logger.debug(  f'(471) ApiCOMMS_ERR015: Error en txbytestram. ID={self.plcid}tx_bytestream={self.tx_bytestream}' )
             return self.tx_bytestream
         #
         # Controlo errores: el payload no puede ser mas largo que el tamaño del bloque (frame)
         if len(self.tx_bytestream) > self.send_mbk_length:
-            self.app.logger.debug(  f'ID={self.plcid}, FUNC=convert_dict2bytes, LENGTH ERROR: tx_bytestream={len(self.tx_bytestream)}, send_mbk_length={self.send_mbk_length}' )
-            self.app.logger.debug(  f'ID={self.plcid}, FUNC=convert_dict2bytes, tx_bytestream={self.tx_bytestream}' )
+            self.app.logger.debug(  f'(472) ApiCOMMS_ERR016: Error txbytestream length. ID={self.plcid}, tx_bytestream={len(self.tx_bytestream)}, send_mbk_length={self.send_mbk_length}' )
             return self.tx_bytestream
         #
         # Relleno con 0 el bloque

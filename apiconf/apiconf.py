@@ -11,6 +11,11 @@ apt-get install libpq-dev
 pip install psycopg2
 
 -----------------------------------------------------------------------------
+R001 @ 2023-06-17 (commsv3_apiconf:1.2)
+- En el entrypoint '/apiconf/unidades' el json que devuelvo tiene una nueva
+  clave 'nro_unidades'
+  
+-----------------------------------------------------------------------------
 R001 @ 2023-06-14 (commsv3_apiconf:1.1)
 - Se manejan todos los parámetros por variables de entorno
 - Se agrega un entrypoint 'ping' que permite ver si la api esta operativa
@@ -38,7 +43,7 @@ PGSQL_BD = os.environ.get('PGSQL_BD','bd_spcomms')
 APICONF_HOST = os.environ.get('APICONF_HOST','apiconf')
 APICONF_PORT = os.environ.get('APICONF_PORT','5200')
 
-API_VERSION = 'R001 @ 2023-06-14'
+API_VERSION = 'R001 @ 2023-06-17'
 
 app = Flask(__name__)
 api = Api(app)
@@ -50,24 +55,29 @@ ERROR SQL003: Pgsql execute error
 
 WARN SQL001: No config rcd in SQL
 
+
 '''
 class Ping(Resource):
     '''
     Prueba la conexion a la SQL
     '''
     def get(self):
+
         url = f'postgresql+psycopg2://{PGSQL_USER}:{PGSQL_PASSWD}@{PGSQL_HOST}:{PGSQL_PORT}/{PGSQL_BD}'
         try:
             self.engine = create_engine(url=url, echo=True)
         except SQLAlchemyError as err:
-            app.logger.info( f'CONFSQL_ERR001: Pgsql engine error, HOST:{PGSQL_HOST} Err={err}')
-            return {'rsp':'FAIL','version':API_VERSION,'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT }, 500 
+            app.logger.info( f'(100) ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            return d_rsp, 500
+        
         # Connection
         try:
             self.conn = self.engine.connect()
         except SQLAlchemyError as err:
-            app.logger.info( f'CONFSQL_ERR002: Pgsql connection error, HOST:{PGSQL_HOST} Err={err}')
-            return {'rsp':'FAIL','version':API_VERSION,'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT }, 503
+            app.logger.info( f'(101) ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            return d_rsp, 500
     
         print("Connected to PGSQL!")
         self.conn.close()
@@ -156,8 +166,9 @@ class Config(Resource):
         try:
             self.engine = create_engine(url=self.url, echo=False)
         except SQLAlchemyError as err:
-            app.logger.info( f'SQL_ERR001: Pgsql engine error:{PGSQL_HOST}/{PGSQL_PORT} Err={err}')
-            self.response = {'rsp':'Error', 'msg':f'Pgsql engine error:{PGSQL_HOST}/{PGSQL_PORT}' }
+            app.logger.info( f'(102) ApiCONF_ERR003: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            self.response = d_rsp
             self.status_code = 500
             return False
              
@@ -165,10 +176,12 @@ class Config(Resource):
         try:
             self.conn = self.engine.connect()
         except SQLAlchemyError as err:
-            app.logger.info( f'SQL_ERR002: Pgsql connection error:{PGSQL_HOST}/{PGSQL_PORT} Err={err}')
-            self.response = {'rsp':'Error', 'msg':f'Pgsql connection error:{PGSQL_HOST}/{PGSQL_PORT}'}
+            app.logger.info( f'(103) ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            self.response = d_rsp
             self.status_code = 500
             return False
+        
         return True
     
     def __convert_flatten__(self, d, parent_key ='', sep =':'):
@@ -212,8 +225,9 @@ class Config(Resource):
                 rp = self.conn.execute(query)
                 row = rp.fetchone()
             except SQLAlchemyError as err:
-                app.logger.info( f'SQL_ERR003: Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}, Err={err}')
-                self.response = {'rsp':'Error', 'msg':f'Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}'}
+                app.logger.info( f'(104) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+                d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+                self.response = d_rsp
                 self.status_code = 500
                 return self.response, self.status_code
             finally:
@@ -223,7 +237,7 @@ class Config(Resource):
 
         if row is None:
             # No hay datos de la unidad.
-            app.logger.info( f'SQL_WARN001: No config rcd in SQL, code 204')
+            app.logger.info( f'ApiCONF_WARN001: No config rcd in SQL')
             return {},204   # NO CONTENT
         #
         # La configuracion que me devolvio la BD es un objeto python, NO json !!!.
@@ -260,8 +274,9 @@ class Config(Resource):
                 rp = self.conn.execute(query)
                 row = rp.fetchone()
             except SQLAlchemyError as err:
-                app.logger.info( f'SQL_ERR003: Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}, Err={err}')
-                self.response = {'rsp':'Error', 'msg':f'Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}'}
+                app.logger.info( f'(105) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+                d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+                self.response = d_rsp
                 self.status_code = 500
                 return self.response, self.status_code
             finally:
@@ -276,15 +291,16 @@ class Config(Resource):
             pk = row[0]
             sql = f"UPDATE configuraciones SET jconfig = '{jd_config}' WHERE pk = '{pk}'"
         #
-        print(f'DEBUG SQL {sql}')
+        #print(f'DEBUG SQL {sql}')
         query = text(sql)
         try:
             self.conn = self.engine.connect()
             _ = self.conn.execute(query)
             self.conn.commit()
         except SQLAlchemyError as err:
-            app.logger.info( f'SQL_ERR003: Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}, Err={err}')
-            self.response = {'rsp':'Error', 'msg':f'Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}'}
+            app.logger.info( f'(106) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+            self.response = d_rsp
             self.status_code = 500
             return self.response, self.status_code
         finally:
@@ -304,8 +320,9 @@ class GetAllUnits(Config):
             try:
                 rp = self.conn.execute(query)
             except SQLAlchemyError as err:
-                app.logger.info( f'SQL_ERR003: Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}, Err={err}')
-                self.response = {'rsp':'Error', 'msg':f'Pgsql execute error:{PGSQL_HOST}/{PGSQL_PORT}'}
+                app.logger.info( f'(107) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+                d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+                self.response = d_rsp
                 self.status_code = 500
                 return self.response, self.status_code
             finally:
@@ -317,7 +334,9 @@ class GetAllUnits(Config):
         for row in rp.fetchall():
             l_unidades.append(row[0])
 
-        d_rsp = {'l_unidades': l_unidades}
+        l_unidades = sorted(l_unidades)
+        nro_unidades = len(l_unidades)
+        d_rsp = {'nro_unidades':nro_unidades, 'l_unidades':l_unidades}
         return d_rsp,200
 
 class  Uid2dlgid(Resource):

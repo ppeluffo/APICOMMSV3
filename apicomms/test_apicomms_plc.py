@@ -51,24 +51,17 @@ import pickle
 import json
 
 APICOMMS_HOST='127.0.0.1'
-APICOMMS_PORT='5000'
+APICOMMS_PORT='5500'
+
 APIREDIS_HOST='127.0.0.1'
 APIREDIS_PORT='5100'
 
+APICONF_HOST = '127.0.0.1'
+APICONF_PORT = '5200'
+               
 
-def simulatePlc():
-    url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apicomms'
-    params = { 'ID':'PLCTEST','VER':'1.1.0','TYPE':'PLC'}
-    data = b'f\xe6\xf6Bdx\x00\xcd\xcc\x01B\x14(\x8dU'
-    headers={'Content-Type': 'application/octet-stream'}
-    res = requests.post( url=url, params=params, data=data, headers=headers)
-    print(f'response_code={res.status_code}')
-    print(f'response_content={res.content}')
- 
-def crear_configuracion_test():
-    '''
-    Crea para el PLCTEST el archivo de configuracion que tiene el memblock
-    '''
+def crear_configuracion_test_plc():
+    
     d_conf = { 'MEMBLOCK':{
         'RCVD_MBK_DEF': [
             ['UPA1_CAUDALIMETRO', 'float', 0],['UPA1_STATE1', 'uchar', 1],['UPA1_POS_ACTUAL_6', 'short', 8],
@@ -83,44 +76,98 @@ def crear_configuracion_test():
         'SEND_MBK_LENGTH':24
         },
         'REMVARS':{
-            'KIYU001': [
-                ('HTQ1', 'ALTURA_TANQUE_KIYU_1'), 
-                ('HTQ2', 'ALTURA_TANQUE_KIYU_2')
+            'DLGTEST01': [
+                ('pA', 'ALTURA_TANQUE_KIYU_1'), 
+                ('pB', 'ALTURA_TANQUE_KIYU_2')
             ],
-            'SJOSE001': [
-                ('PA', 'PRESION_ALTA_SJ1'), 
-                ('PB', 'PRESION_BAJA_SQ1')
+            'DLGTEST02': [
+                ('pA', 'PRESION_ALTA_SJ1'), 
+                ('pB', 'PRESION_BAJA_SQ1')
             ]
         }
     }
 
-    #jd_conf = json.dumps(d_conf)
-    #url = f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/configuracion'
-    #req=requests.put(url=url,params={'unit':id}, json=jd_conf)
-    #if req.status_code == 200:
-    #    print(f'SET_CONFIG OK.')
-    #else:
-    #    print(f'SET_CONFIG FAIL. {req.status_code}')
+    params = {'unit':'PLCTEST'}
+    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config'
+    rsp = requests.post(url=url, params=params, json=d_conf, timeout=10 )
+    if rsp.status_code == 200:
+        return True
+    return False
 
-    pk_d_conf = pickle.dumps(d_conf)
-    rh = redis.Redis()
-    rh.hset('PLCTEST','PKCONFIG',pk_d_conf)
-    #
-    d_line1={'DATE':'230519', 'TIME':'1200', 'HTQ1':1.23, 'HTQ2': 4.56 }
-    pk_d_line1 = pickle.dumps(d_line1)
-    rh.hset('KIYU001', 'PKLINE', pk_d_line1)
-    #
-    d_line2={'DATE':'230519', 'TIME':'1300', 'PA':3.4, 'PB':7.8}
-    pk_d_line2 = pickle.dumps(d_line2)
-    rh.hset('SJOSE001', 'PKLINE', pk_d_line2)
+def crear_configuracion_test_dlgs():
 
-    order_atvise = { 'UPA1_ORDER_1':101, 'UPA1_CONSIGNA_6': 102, 'ESP_ORDER_8': 103 }
-    pk_order_atvise = pickle.dumps(order_atvise)
-    rh.hset('PLCTEST', 'PKATVISE', pk_order_atvise)
+    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/template?type=DLG&ver=latest'
+    rsp = requests.get(url=url, timeout=10 )
+    if rsp.status_code != 200:
+        return False
+    #
+    d_template = rsp.json().get('template',{})
+    #
+    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config?unit=DLGTEST01'
+    rsp = requests.post(url=url, json=d_template, timeout=10 )
+    if rsp.status_code != 200:
+        return False
+    #
+    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config?unit=DLGTEST02'
+    rsp = requests.post(url=url, json=d_template, timeout=10 )
+    if rsp.status_code != 200:
+        return False
+    #
+    return True
+
+def generar_datos_test_dlgs():
+
+    url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apicomms'
+    params = { 'ID':'',
+               'TYPE':'SPXR3',
+               'VER':'1.1.0',
+               'CLASS':'DATA',
+               'DATE':'230321',
+               'TIME':'094504',
+               'pA':1.23,
+               'pB': 2.45,
+               'bt':12.1 }
+
+    params['ID'] = 'DLGTEST01'
+    res = requests.get(url=url, params=params, timeout=10)
+    if res.status_code != 200:
+        return False
+    
+    params['ID'] = 'DLGTEST02'
+    res = requests.get(url=url, params=params, timeout=10)
+    if res.status_code != 200:
+        return False
+    
+    return True
+    
+def generar_ordenes_atvise():
+
+    orden_atvise = { 'UPA1_ORDER_1':101, 'UPA1_CONSIGNA_6': 102, 'ESP_ORDER_8': 103 }
+    params = {'unit':'PLCTEST'}
+    url = f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenesatvise'
+    res = requests.post(url=url, params=params, json=orden_atvise, timeout=10)
+    if res.status_code != 200:
+        return False
+    return True
+
+def generar_datos_test_plc():
+
+    url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apicomms'
+    params = { 'ID':'PLCTEST','VER':'1.1.0','TYPE':'PLC'}
+    data = b'f\xe6\xf6Bdx\x00\xcd\xcc\x01B\x14(\x8dU'
+    headers={'Content-Type': 'application/octet-stream'}
+    res = requests.post( url=url, params=params, data=data, headers=headers)
+    print(f'response_code={res.status_code}')
+    print(f'response_content={res.content}')
+
 
 if __name__ == '__main__':
-    #crear_configuracion_test()
-    simulatePlc()
+ #   crear_configuracion_test_plc()
+ #   crear_configuracion_test_dlgs()
+ #   generar_datos_test_dlgs()
+ #   generar_ordenes_atvise()
+    generar_datos_test_plc()
+
 
 
 
