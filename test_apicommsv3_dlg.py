@@ -15,10 +15,12 @@ import os
 import signal
 import argparse
 
-APICOMMS_HOST = '127.0.0.1'
+#APICOMMS_HOST = '127.0.0.1'
+APICOMMS_HOST = '192.168.0.8'
 APICOMMS_PORT = '5000'
 
-APICONF_HOST = '127.0.0.1'
+#APICONF_HOST = '127.0.0.1'
+APICONF_HOST = '192.168.0.8'
 APICONF_PORT = '5200'
 
 #NRO_UNIDADES = 20
@@ -192,6 +194,11 @@ def process_arguments():
                         help='Numero de unidades')
     parser.add_argument('-d', '--date', dest='initial_date', action='store', default='23-01-01 00:00',
                         help='Fecha de inicio de frames')
+    parser.add_argument('-a', '--apicomms_host', dest='apicomms_host', action='store', default='127.0.0.1',
+                        help='IP del host de apicomms')
+    parser.add_argument('-a', '--apiconf_host', dest='apiconf_host', action='store', default='127.0.0.1',
+                        help='IP del host de apiconf')
+    
     args = parser.parse_args()
     d_args = vars(args)
     return d_args

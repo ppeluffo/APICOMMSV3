@@ -4,12 +4,7 @@ Clase especializada en utilidades de frames de dataloggers version SPXR3
 '''
 
 import re
-import requests
 import datetime as dt
-import json
-
-APIREDIS_HOST = 'appredis'
-APIREDIS_PORT = '5100'
 
 class dlgutils:
 
@@ -173,13 +168,13 @@ class dlgutils:
         '''
         xhash = 0
         for channel in ['A0','A1','A2']:
-            enable = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('ENABLE','FALSE')
-            name = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('NAME','X')
-            imin=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN','0'))
-            imax=int( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX','0'))
-            mmin=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN','0'))
-            mmax=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX','0'))
-            offset=float( self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET','0'))
+            enable = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('ENABLE','FALSE')
+            name = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('NAME','X')
+            imin=int( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN','0'))
+            imax=int( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX','0'))
+            mmin=float( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMIN','0'))
+            mmax=float( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX','0'))
+            offset=float( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('OFFSET','0'))
             hash_str = f'[{channel}:{enable},{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
             xhash = self.u_hash(xhash, hash_str)
             #print(f'DEBUG::get_hash_config_ainputs: hash_str={hash_str}, xhash={xhash}')
@@ -203,13 +198,13 @@ class dlgutils:
         '''
         response = 'CLASS=CONF_AINPUTS&'
         for channel in ['A0','A1','A2']:
-            enable = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('ENABLE', 'FALSE')
-            name = self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('NAME', 'X')
-            imin = int(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMIN', 4))
-            imax = int(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('IMAX', 20))
-            mmin = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMIN', 0.00))
-            mmax = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('MMAX', 10.00))
-            offset = float(self.d_local_conf.get('ANALOGS',{}).get(channel,{}).get('OFFSET', 0.00))
+            enable = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('ENABLE', 'FALSE')
+            name = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('NAME', 'X')
+            imin = int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN', 4))
+            imax = int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX', 20))
+            mmin = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMIN', 0.00))
+            mmax = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX', 10.00))
+            offset = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('OFFSET', 0.00))
             response += f'{channel}={enable},{name},{imin},{imax},{mmin},{mmax},{offset}&'
         #
         response = response[:-1]

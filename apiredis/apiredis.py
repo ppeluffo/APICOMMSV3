@@ -290,18 +290,21 @@ class Uid2id(Resource):
         #
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            unit_id = rh.hget( args['uid'], 'UID2DLGID' )
+            unit_id = rh.hget('RECOVERIDS', args['uid'] )
         except redis.ConnectionError:
-            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            app.logger.info( f'(027) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
+            return d_rsp, 500
         #
         if unit_id is None:
-            app.logger.info( f'REDIS_WARN003: No uid2dlgid rcd, code 204')
+            app.logger.info( f'(028) ApiREDIS_WARN004: No uid2dlgid rcd')
             return {},204   # NO CONTENT
         #
-        d_resp = {'uid': args['uid'], 'id':unit_id }
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        uid = args['uid']
+        if isinstance(unit_id, bytes):
+            unit_id = unit_id.decode()
+        d_resp = {'uid': uid, 'id':unit_id }
+        return d_resp,200
 
     def put(self):
         ''' Actualiza(override) las tupla UID/DLGID
@@ -315,31 +318,31 @@ class Uid2id(Resource):
             json.loads(req.json())
 
         '''
-        parser = reqparse.RequestParser()
-        parser.add_argument('unit',type=str,location='args',required=True)
-        args=parser.parse_args()
         #
-        jd_params = request.get_json()
-        d_params = json.loads(jd_params)
+        d_params = request.get_json()
         if 'uid' not in d_params:
-            app.logger.info('REDIS_ERR002: No UID in request_json_data')
+            app.logger.info( f'(029) ApiREDIS_ERR007: No UID in request_json_data')
             return {'Err':'No UID'}, 406
         #
-        if 'unit' not in d_params:
-            app.logger.info('REDIS_ERR003: No ID in request_json_data')
+        if 'id' not in d_params:
+            app.logger.info( f'(030) ApiREDIS_ERR008: No ID in request_json_data')
             return {'Err':'No ID'}, 406
         #
+        if d_params['id'] == 'DEFAULT':
+            app.logger.info( f'(032) ApiREDIS_ERR009: No ID no puede ser DEFAULT')
+            return {'Err':'ID no puede ser DEFAULT'}, 406
+    
         #app.logger.debug(f'Ordenes/Put DBUG: ordenes={ordenes}')
         rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            _ = rh.hset( 'UID2DLGID', args['uid'], args['unit'] )
+            _ = rh.hset( 'RECOVERIDS', d_params['uid'], d_params['id'] )
         except redis.ConnectionError:
-            app.logger.info( f'REDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}')
-            return {'Err':f'No se puede conectar a REDIS HOST:{BDREDIS_HOST}'}, 500
+            app.logger.info( f'(031) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
+            return d_rsp, 500
         #
-        d_resp = {'uid':args['uid'], 'unit':args['unit']}
-        jd_resp = json.dumps(d_resp)
-        return jd_resp,200
+        d_resp = {'rsp':'OK'}
+        return d_resp,200
     
 class Ordenes(Resource):
 
@@ -806,7 +809,7 @@ api.add_resource( Test, '/apiredis/test')
 
 if __name__ != '__main__':
     # SOLO PARA TESTING !!!
-    # BDREDIS_HOST = '127.0.0.1'
+    BDREDIS_HOST = '127.0.0.1'
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)

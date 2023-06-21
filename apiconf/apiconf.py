@@ -25,9 +25,8 @@ import os
 import json
 from sqlalchemy import create_engine, exc
 from sqlalchemy.exc import SQLAlchemyError
-import psycopg2
-
 from sqlalchemy import text
+from sqlalchemy.pool import NullPool
 import logging
 from flask import Flask, request, jsonify
 from flask_restful import Resource, Api, reqparse
@@ -57,31 +56,140 @@ WARN SQL001: No config rcd in SQL
 
 
 '''
+class BD_SQL_BASE:
+
+    def __init__(self):
+        self.engine = None
+        self.conn = None
+        self.response = ''
+        self.status_code = 0
+        self.url = f'postgresql+psycopg2://{PGSQL_USER}:{PGSQL_PASSWD}@{PGSQL_HOST}:{PGSQL_PORT}/{PGSQL_BD}'
+
+    def connect(self):
+        # Engine
+        try:
+            self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+        except SQLAlchemyError as err:
+            app.logger.info( f'(100) ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            return False 
+        # Connection
+        try:
+            self.conn = self.engine.connect()
+            self.conn.autocommit = True
+        except SQLAlchemyError as err:
+            app.logger.info( f'(101) ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            return False
+        #
+        return True
+        #
+
+    def close(self):
+        '''
+        '''
+        #app.logger.info( f'(DEBUG) ApiCONF_INFO: Sql close and dispose R2. HOST:{PGSQL_HOST}:{PGSQL_PORT}')
+        self.conn.invalidate()
+        self.conn.close()     
+        self.engine.dispose()
+
+    def exec_sql(self, sql):
+        # Ejecuta la orden sql.
+        # Retorna un resultProxy o None
+        if not self.connect():
+            app.logger.info( f'(102) ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}')
+            return {'res':False }
+        #
+        try:
+            query = text(sql)
+        except Exception as err:
+            app.logger.info( f'(103) ApiCONF_ERR003: Sql query error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{sql}')
+            app.logger.info( f'(104) ApiCONF_ERR004: Sql query exception, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            return {'res':False }
+        #
+        try:
+            #print(sql)
+            rp = self.conn.execute(query)
+        except Exception as err:
+            app.logger.info( f'(105) ApiDATOS_ERR005: Sql exec error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+            return {'res':False }
+        #
+        return {'res':True,'rp':rp }
+
+    def read_configuration(self, unit_id):
+        '''
+        Lee el jconfig  del usuario
+        '''
+        sql = f"SELECT jconfig FROM configuraciones WHERE unit_id = '{unit_id}'" 
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(105) ApiCONF_ERR007: select_user FAIL')
+        return d_res
+        #
+
+    def insert_configuration(self, unit_id, jd_config ):
+        '''
+        Inserta un nuevo usuario en la tabla usuarios
+        Retorna True/False
+        '''
+        # Determino si existe el registro (UPDATE) o no (INSERT)
+        sql = f"SELECT pk FROM configuraciones WHERE unit_id = '{unit_id}'"
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(106) ApiCONF_ERR008: insert_user FAIL')
+            return d_res
+        #
+        rp = d_res.get('rp',None)
+        if rp.rowcount == 0:
+            # Hago un INSERT:
+            sql = f"INSERT INTO configuraciones (unit_id, uid, jconfig ) VALUES ('{unit_id}','0','{jd_config}')"
+        else:
+            row = rp.fetchone()
+            pk = row[0]
+            sql = f"UPDATE configuraciones SET jconfig = '{jd_config}' WHERE pk = '{pk}'"
+        #
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(107) ApiCONF_ERR008: insert_user FAIL')
+        return d_res
+
+    def read_uid(self, uid):
+        '''
+        '''
+        sql = f"SELECT id FROM recoverid WHERE uid = '{uid}'" 
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(108) ApiCONF_ERR012: read_uid FAIL')
+        return d_res
+
+    def insert_uid(self, id, uid):
+        '''
+        '''
+        sql = f"DELETE FROM recoverid WHERE uid = '{uid}'"
+        d_res = self.exec_sql(sql)
+        sql = f"DELETE FROM recoverid WHERE id = '{id}'"
+        d_res = self.exec_sql(sql)
+        #
+        sql = f"INSERT INTO recoverid (id, uid ) VALUES ('{id}','{uid}')"
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(109) ApiCONF_ERR011: insert_uid FAIL')
+            return d_res
+        #
+        return d_res
+
 class Ping(Resource):
     '''
     Prueba la conexion a la SQL
     '''
     def get(self):
 
-        url = f'postgresql+psycopg2://{PGSQL_USER}:{PGSQL_PASSWD}@{PGSQL_HOST}:{PGSQL_PORT}/{PGSQL_BD}'
-        try:
-            self.engine = create_engine(url=url, echo=True)
-        except SQLAlchemyError as err:
-            app.logger.info( f'(100) ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-            return d_rsp, 500
-        
-        # Connection
-        try:
-            self.conn = self.engine.connect()
-        except SQLAlchemyError as err:
-            app.logger.info( f'(101) ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-            return d_rsp, 500
-    
-        print("Connected to PGSQL!")
-        self.conn.close()
-        return {'rsp':'OK','version':API_VERSION,'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT },200
+        bdpgsl = BD_SQL_BASE()
+        if bdpgsl.connect():
+            print("Connected to PGSQL!")
+            bdpgsl.close()
+            return {'rsp':'OK','version':API_VERSION,'SQL_HOST':PGSQL_HOST, 'SQL_PORT':PGSQL_PORT },200
+        #
+        d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR001: Pgsql connect error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
+        return d_rsp, 500
 
 class GetTemplate(Resource):
     '''
@@ -153,37 +261,6 @@ class GetVersiones(Resource):
     
 class Config(Resource):
 
-    def __init__(self):
-
-        self.engine = None
-        self.conn = None
-        self.response = ''
-        self.status_code = 0
-        self.url = f'postgresql+psycopg2://{PGSQL_USER}:{PGSQL_PASSWD}@{PGSQL_HOST}:{PGSQL_PORT}/{PGSQL_BD}'
-
-    def __bd_connect__(self):
-        # Engine
-        try:
-            self.engine = create_engine(url=self.url, echo=False)
-        except SQLAlchemyError as err:
-            app.logger.info( f'(102) ApiCONF_ERR003: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-            self.response = d_rsp
-            self.status_code = 500
-            return False
-             
-        # Connection
-        try:
-            self.conn = self.engine.connect()
-        except SQLAlchemyError as err:
-            app.logger.info( f'(103) ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR002: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-            self.response = d_rsp
-            self.status_code = 500
-            return False
-        
-        return True
-    
     def __convert_flatten__(self, d, parent_key ='', sep =':'):
         '''
         '''
@@ -218,32 +295,23 @@ class Config(Resource):
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
         #
-        sql = f"SELECT jconfig FROM configuraciones WHERE unit_id = '{args['unit']}'"
-        query = text(sql)
-        if self.__bd_connect__():
-            try:
-                rp = self.conn.execute(query)
-                row = rp.fetchone()
-            except SQLAlchemyError as err:
-                app.logger.info( f'(104) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-                d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-                self.response = d_rsp
-                self.status_code = 500
-                return self.response, self.status_code
-            finally:
-                self.conn.close()
-        else:
-            return self.response, self.status_code
-
-        if row is None:
-            # No hay datos de la unidad.
-            app.logger.info( f'ApiCONF_WARN001: No config rcd in SQL')
-            return {},204   # NO CONTENT
+        bdsql = BD_SQL_BASE()
+        d_res =  bdsql.read_configuration(args['unit'])
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
         #
-        # La configuracion que me devolvio la BD es un objeto python, NO json !!!.
+        rp = d_res.get('rp',None)
+        if rp.rowcount == 0:
+            app.logger.info( f'(110) ApiCONF_WARN001: No config rcd in SQL')
+            bdsql.close()
+            return {},204
+
+        row = rp.fetchone()
         d_config = row[0]
+        bdsql.close()
         return d_config, 200
-    
+        
     def post(self):
         '''
         Crea/actualiza la configuracion de una unidad.
@@ -259,53 +327,12 @@ class Config(Resource):
         # https://stackoverflow.com/questions/26745519/converting-dictionary-to-json
         #
         jd_config = json.dumps(d_config)
-        #
-        # Vemos si la configuracion enviada es consistente
-        #d_config = json.loads(jd_config)
-        #claves_de_mas, claves_de_menos = self.__compare_dicts__(DLG_CONF_TEMPLATE['1.1.0'], d_config)
-        #if len(claves_de_mas) > 0 or len(claves_de_menos) > 0:
-        #    return jsonify ( {'claves_de_mas':claves_de_mas, 'claves_de_menos':claves_de_menos})
-        #
-        # Determino si existe el registro (UPDATE) o no (INSERT)
-        sql = f"SELECT pk FROM configuraciones WHERE unit_id = '{args['unit']}'"
-        query = text(sql)
-        if self.__bd_connect__():
-            try:
-                rp = self.conn.execute(query)
-                row = rp.fetchone()
-            except SQLAlchemyError as err:
-                app.logger.info( f'(105) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-                d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-                self.response = d_rsp
-                self.status_code = 500
-                return self.response, self.status_code
-            finally:
-                self.conn.close()
-        else:
-            return self.response, self.status_code
-        #
-        if row is None:
-            # Hago un INSERT:
-            sql = f"INSERT INTO configuraciones (unit_id, uid, jconfig ) VALUES ('{args['unit']}','0','{jd_config}')"
-        else:
-            pk = row[0]
-            sql = f"UPDATE configuraciones SET jconfig = '{jd_config}' WHERE pk = '{pk}'"
-        #
-        #print(f'DEBUG SQL {sql}')
-        query = text(sql)
-        try:
-            self.conn = self.engine.connect()
-            _ = self.conn.execute(query)
-            self.conn.commit()
-        except SQLAlchemyError as err:
-            app.logger.info( f'(106) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-            d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-            self.response = d_rsp
-            self.status_code = 500
-            return self.response, self.status_code
-        finally:
-            self.conn.close()
-        #
+        bdsql = BD_SQL_BASE()
+        d_res =  bdsql.insert_configuration(args['unit'], jd_config)
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
+        # 
         return {'rsp':'OK'}, 200
 
 class GetAllUnits(Config):
@@ -314,13 +341,13 @@ class GetAllUnits(Config):
         '''
         '''
         #
-        sql = f"SELECT unit_id FROM configuraciones"
+        sql = "SELECT unit_id FROM configuraciones"
         query = text(sql)
         if self.__bd_connect__():
             try:
                 rp = self.conn.execute(query)
             except SQLAlchemyError as err:
-                app.logger.info( f'(107) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+                app.logger.info( f'(111) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
                 d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
                 self.response = d_rsp
                 self.status_code = 500
@@ -339,68 +366,61 @@ class GetAllUnits(Config):
         d_rsp = {'nro_unidades':nro_unidades, 'l_unidades':l_unidades}
         return d_rsp,200
 
-class  Uid2dlgid(Resource):
-
-    def __init__(self):
-        self.engine = create_engine('sqlite:///unidades.db', echo=True)
+class Uid2id(Resource):
 
     def get(self):
         '''
-        Lee la configuracion de un equipo de la SQL
-        En la BS almacenamos json.(strings)
-        Retornamos un json.
         '''
         parser = reqparse.RequestParser()
         parser.add_argument('uid',type=str,location='args',required=True)
         args=parser.parse_args()
+        uid = args['uid']
         #
-        sql = f"SELECT dlgid FROM tb_uid2dlgid WHERE uid = '{args['uid']}'"
-        query = text(sql)
-        try:
-            conn = self.engine.connect()
-            rp = conn.execute(query)
-            row = rp.fetchone()
-            conn.commit()
-        except exc.SQLAlchemyError as err:
-            app.logger.info( f'CONFSQL_ERR001: Exception={err}')
-            return {},500
-        finally:
-            conn.close()
-        if row is None:
-            # No hay datos de la unidad.
-            app.logger.info( f'CONFSQL_WARN001: No config rcd in SQL, code 204')
-            return {},204   # NO CONTENT
-        jd_config = row[2]
-        return jd_config,200
-    
-    def post(self):
+        bdsql = BD_SQL_BASE()
+        d_res =  bdsql.read_uid(uid)
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
+        #
+        rp = d_res.get('rp',None)
+        if rp.rowcount == 0:
+            app.logger.info( f'(112) ApiCONF_WARN001: No config rcd in SQL')
+            bdsql.close()
+            return {},204
+
+        row = rp.fetchone()
+        unit_id = row[0]
+        bdsql.close()
+        d_resp = {'uid': uid, 'id':unit_id }
+        return d_resp,200
+        
+    def put(self):
         '''
         Crea/actualiza la configuracion de una unidad.
         Recibimos un json que almacenamos.
         No lo chequeamos !!!
         '''
-        parser = reqparse.RequestParser()
-        parser.add_argument('uid',type=str,location='args',required=True)
-        parser.add_argument('dlgid',type=str,location='args',required=True)
-        args=parser.parse_args()
+        d_params = request.get_json()
+        if 'uid' not in d_params:
+            app.logger.info( f'(113) ApiCONF_ERR009: No UID in request_json_data')
+            return {'Err':'No UID'}, 406
         #
-        # get_json() convierte el objeto JSON a un python dict: lo serializo pickle
-        jd_config = request.get_json()
+        if 'id' not in d_params:
+            app.logger.info( f'(114) ApiCONF_ERR010: No ID in request_json_data')
+            return {'Err':'No ID'}, 406
+        # 
+        if d_params['id'] == 'DEFAULT':
+            app.logger.info( f'(115) ApiCONF_ERR013: No ID no puede ser DEFAULT')
+            return {'Err':'ID no puede ser DEFAULT'}, 406
+        
+        bdsql = BD_SQL_BASE()
+        d_res =  bdsql.insert_uid( d_params['id'], d_params['uid'] )
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
         #
-        sql = f"INSERT INTO tb_uid2dlgid (unit_name, jd_config ) VALUES ('{args['unit']}','{jd_config}')"
-        query = text(sql)
-        try:
-            conn = self.engine.connect()
-            conn.execute(query)
-            conn.commit()
-        except exc.SQLAlchemyError as err:
-            app.logger.info( f'CONFSQL_ERR001: Exception={err}')
-            return {},500
-        finally:
-            conn.close()
-        #
-        return jd_config,200
-
+        return {'rsp':'OK'}, 200
+    
 class Help(Resource):
 
     def get(self):
@@ -421,7 +441,7 @@ api.add_resource( GetVersiones, '/apiconf/versiones')
 api.add_resource( GetTemplate, '/apiconf/template')
 api.add_resource( GetAllUnits, '/apiconf/unidades')
 api.add_resource( Config, '/apiconf/config')
-api.add_resource( Uid2dlgid, '/apiconf/uis2dlgid')
+api.add_resource( Uid2id, '/apiconf/uid2id')
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')

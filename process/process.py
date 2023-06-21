@@ -36,6 +36,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 
+MAX_INSERTS_CHUNK_SIZE = int(os.environ.get('MAX_INSERTS_CHUNK_SIZE',100))
 MAX_DEQUEUE_ITEMS = int(os.environ.get('MAX_DEQUEUE_ITEMS',100))
 SLEEP_TIME = int(os.environ.get('SLEEP_TIME',60))
 
@@ -142,11 +143,13 @@ class BD_SQL_BASE:
         En forma estándard acepta meter hasta 50 inserts juntos.!!!
         '''
         # Debo hacer chunks de N(50) inserts
-        step = 50
+        step = MAX_INSERTS_CHUNK_SIZE
         for i in range(0, len(l_tuples), step):
             x = i
             chunk = l_tuples[x:x+step]
-
+            if len(chunk) == 0:
+                return
+            
             # TABLA HISTORICA
             sql_historica = f"INSERT INTO historica ( fechadata,fechasys,equipo,tag,valor) VALUES " 
             sql_online = f"INSERT INTO online ( fechadata,fechasys,equipo,tag,valor) VALUES " 
@@ -254,8 +257,8 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, clt_C_handler)
 
-    APIREDIS_HOST = '127.0.0.1'
-    PGSQL_HOST = '127.0.0.1'
+    #APIREDIS_HOST = '127.0.0.1'
+    #PGSQL_HOST = '127.0.0.1'
 
     print("APICOMMS PROCESS Starting...Waiting 60 secs....")
     print(f'-SLEEP_TIME={SLEEP_TIME}')

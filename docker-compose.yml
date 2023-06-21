@@ -3,6 +3,9 @@ version: '3.1'
 services:
 
   appcomms:
+    build:
+      context: ./apicomms
+      dockerfile: Dockerfile
     image: spymovil/commsv3_apicomms:latest
     ports:
       - 5000:5000
@@ -21,6 +24,9 @@ services:
       APICONF_PORT: 5200
 
   apiconf:
+    build:
+      context: ./apiconf
+      dockerfile: Dockerfile
     image: spymovil/commsv3_apiconf:latest
     ports:
       - 5200:5200
@@ -37,9 +43,11 @@ services:
       PGSQL_USER: admin
       PGSQL_PASSWD: pexco599
       PGSQL_BD: bd_spcomms
-      MAX_CHUNK_SIZE: 10
 
   apidatos:
+    build:
+      context: ./apidatos
+      dockerfile: Dockerfile
     image: spymovil/commsv3_apidatos:latest
     ports:
       - 5300:5300
@@ -58,8 +66,12 @@ services:
       PGSQL_BD: bd_spcomms
       APIDATOS_HOST: apidatos
       APIDATOS_PORT: 5300
+      MAX_SELECT_CHUNK_SIZE: 100
 
   apiredis:
+    build:
+      context: ./apiredis
+      dockerfile: Dockerfile
     image: spymovil/commsv3_apiredis:latest
     ports:
       - 5100:5100
@@ -78,9 +90,14 @@ services:
   redis:
     image: redis:alpine
     restart: always
+    volumes:
+      - /datos_redis:/data
 
   pgsql:
-    image: spymovil/commsv3_bd_apicomms:latest
+    build:
+      context: ./pgsql
+      dockerfile: Dockerfile
+    image: spymovil/commsv3_pgsql:latest
     restart: always
     ports:
       - 5432:5432
@@ -92,6 +109,9 @@ services:
       - /datos:/var/lib/postgresql/data
 
   process:
+    build:
+      context: ./process
+      dockerfile: Dockerfile
     image: spymovil/commsv3_process:latest
     restart: always
     logging:
@@ -110,7 +130,8 @@ services:
       PGSQL_USER: admin
       PGSQL_PASSWD: pexco599
       PGSQL_BD: bd_spcomms
-      MAX_DEQUEUE_ITEMS: 10
+      MAX_INSERTS_CHUNK_SIZE: 100
+      MAX_DEQUEUE_ITEMS: 100
       SLEEP_TIME: 60
       
 
