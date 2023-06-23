@@ -809,7 +809,7 @@ api.add_resource( Test, '/apiredis/test')
 
 if __name__ != '__main__':
     # SOLO PARA TESTING !!!
-    BDREDIS_HOST = '127.0.0.1'
+    #BDREDIS_HOST = '127.0.0.1'
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)

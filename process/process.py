@@ -173,7 +173,6 @@ class BD_SQL_BASE:
             self.exec_sql('COMMIT')      
             #
             
-
 def clt_C_handler(signum, frame):
     sys.exit(0)
 
@@ -230,11 +229,13 @@ def read_data_queue_length():
     except requests.exceptions.RequestException as err: 
         print(f"(311) PROCESS_ERR006: queuelength request exception, Err={err}")
         return -1
-    
+    #
     if r_conf.status_code == 200:
         d = r_conf.json()
         queue_length = d.get('length',-1)
         return queue_length
+    #
+    return -1
     
 def read_data_queue(count):
 

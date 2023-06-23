@@ -2,7 +2,6 @@
 '''
 Clase especializada en utilidades de frames de dataloggers version SPXR3
 '''
-
 import re
 import datetime as dt
 

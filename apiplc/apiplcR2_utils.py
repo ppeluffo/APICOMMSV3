@@ -75,24 +75,17 @@ from collections import namedtuple
 from struct import unpack_from, pack
 from pymodbus.utilities import computeCRC
 
-
 class Memblock:
     ''' Defino los objetos memblock que se usan en las comunicaciones de los PLC '''
 
     def __init__(self,app):
 
         self.debug = False
-
         self.app = app              # Para poder usar el log
         self.plcid = None
-        self.rcvd_mbk_def = []      # Definicion del MBK que recibe el servidor desde el PLC
-        self.rcvd_mbk_length = 0
-        self.send_mbk_def = []      # Definicion del MBK que envia el servidor al PLC
-        self.send_mbk_length = 0
-
-        self.rx_payload = ''        # bytestring recibido en el body del POST.
-        self.rx_payload_length = 0
-        self.d_rx_payload = {}      # dict. con las variables y valores recibidos.
+        self.configuracion_mbk = []
+        self.datos_mbk = []
+        self.respuestas_mbk = []
 
         self.tx_bytestream = None   # datos serializados de salida
 
@@ -104,73 +97,153 @@ class Memblock:
     def load_configuration(self, plcid, d_mbk):
         ''' Configura el objeto con los elementos del d_mbk '''
         self.plcid = plcid
-        self.rcvd_mbk_def = d_mbk.get('RCVD_MBK_DEF',[])
-        self.rcvd_mbk_length = d_mbk.get('RCVD_MBK_LENGTH',0)
-        self.send_mbk_def = d_mbk.get('SEND_MBK_DEF',[])
-        self.send_mbk_length = d_mbk.get('SEND_MBK_LENGTH',0)
+        self.configuracion_mbk = d_mbk.get('CONFIGURACION',[])
+        self.datos_mbk = d_mbk.get('DATOS_PLC',[])
+        self.respuestas_mbk = d_mbk.get('DATOS_SRV',[])
+        #
+      
+    def convert_mbk2bytes(self, plcid, l_mbk:list):
+        '''
+        Recibo una lista de memblock y serializo sus valores de acuerdo al formato y orden en la lista.
+        l_mbk = [['ALT_MAX_TQ1', 'float', 10],['ALT_MIN_TQ1', 'float', 2],['PRES_ALM_1', 'short', 101],['TIMER_B2', 'short', 200]]
+        Siempre retorna un bytestream.
+        '''
+        # Proceso la lista del mbk para obtener sus elementos
+        # Obtengo algo del tipo  ('<ffhh', 12, 'ALT_MAX_TQ1 ALT_MIN_TQ1 PRES_ALM_1 TIMER_B2 ')
+
+        tx_bytestream = b''
+        if not isinstance(l_mbk,list):
+            self.app.logger.debug(  f'(550) ApiPLCR2_ERR009: l_mbk no es lista. ID={plcid}' )
+            return tx_bytestream
+
+        sformat, *others = self.__process_mbk__(l_mbk)
+        #
+        # Genero una lista con los valores
+        # Obtengo [10, 2, 101, 200]
+        list_values = [ k for (i,j,k) in l_mbk ]
+        #
+        if self.debug:
+            self.app.logger.info(  f'(551) ApiPLCR2_INFO: ID={plcid},sformat={sformat},list_values={list_values}' )
+        # Serializo la lista de valores con el formato sformat
+        # Convierto la ntuple a un bytearray serializado 
+        # b'\x00\x00 A\x00\x00\x00@e\x00\xc8\x00'
+        try:  
+            tx_bytestream = pack( sformat, *list_values)      
+        except Exception as ex:
+            self.app.logger.debug(  f'(552) ApiPLCR2_ERR010: No puedo serializar lista. ID={plcid},lista={list_values},Err={ex}' )
+        #
+        return tx_bytestream
         #
 
-    def load_rx_payload(self, rx_payload):
-        ''' Carga en el objeto mbk los datos del payload '''
-        self.rx_payload = rx_payload
-        self.rx_payload_length = len(self.rx_payload)
-        if self.debug:
-            self.app.logger.info( f'(460) ApiCOMMS_INFO: ID={self.plcid},rx_payload=({self.rx_payload_length})[{self.rx_payload}]')
-
-    def get_d_rx_payload(self):
+    def convert_bytes2dict(self, plcid, rx_bytes, l_mbk):
         '''
-        Devuelve el diccionario de datos enviados por el PLC
-        '''
-        return self.d_rx_payload
-    
-    def convert_rxbytes2dict( self):
-        '''
-        Toma el payload; 
+        Toma el payload ( bytes )
         Chequea si el crc es correcto.
-        Lo decodifica de acuerdo a la struct definida en el memblock
+        Lo decodifica de acuerdo a la struct definida en l_mbk
         y retorna un dict con las variables y sus valores.
-        Utiliza el r_mbk ( RCVD)
-        La defincion de la struct puede tener menos bytes que el bloque !!!. Para esto debo usar 'unpack_from'
-        '''
-        # 1) El CRC debe ser correcto
-        if not self.__check_payload_crc_valid__():
-            self.app.logger.error('ID={self.plcid}, FUNC=convert_bytes2dict, ERROR: MBK_CRC_ERR' )
-            return False
+        La defincion de la struct no deberia tener menos bytes que el bloque !!!. Por las dudas uso 'unpack_from'
+        
+        l_mbk = 
+        [
+            ['UPA1_CAUDALIMETRO', 'float', 32.15],['UPA1_STATE1', 'uchar', 100],['UPA1_POS_ACTUAL_6', 'short', 24],
+            ['UPA2_CAUDALIMETRO', 'float', 11.5],['BMB_STATE18', 'uchar', 201]
+        ]
 
-        # 2) El payload debe tener largo para ser decodificado de acuerdo al memblock def.
-        if self.rx_payload_length < self.rcvd_mbk_length:
-            self.app.logger.error( f'ID={self.plcid}, FUNC=convert_bytes2dict, ERROR: MBK_RCVD_LENGTH_ERR: payload_length={self.rx_payload_length}, mbk_length={self.rcvd_mbk_length}' )
-            return False
-        #
-        # 3) Calculo los componentes del memblock de recepcion (formato,largo, lista de nombres)
-        sformat, _ , var_names = self.__process_mbk__(self.rcvd_mbk_def)
+        rx_bytes = b'\x9a\x99\x00Bd\x18\x00\x00\x008A\xc9\xaa\xb7'
+
+        '''
+        # Calculo los componentes del memblock de recepcion (formato,largo, lista de nombres)
+        sformat, _ , var_names = self.__process_mbk__(l_mbk)
+        # sformat = '<fBhfB'
+        # var_names = 'UPA1_CAUDALIMETRO UPA1_STATE1 UPA1_POS_ACTUAL_6 UPA2_CAUDALIMETRO BMB_STATE18 '
         if self.debug:
-            self.app.logger.info( f'(461) ApiCOMMS_INFO: ID={self.plcid}, convert_bytes2dict: RXVD_MBK_DEF={self.rcvd_mbk_def}')
+            self.app.logger.info( f'553) ApiPLCR2_INFO: ID={plcid}, convert_rxbytes2dict IN: RXVD_MBK_DEF={l_mbk}, sformat={sformat}, var_names={var_names}')
         #
-        # 4) Desempaco los datos recibidos del PLC de acuerdo al formato dado (del RCVD_MBK)
-        # RCVD_MBK es una lista porque importa el orden de las variables !!!
+        # Desempaco los datos recibidos del PLC de acuerdo al formato dado (sformat del l_mbk)
+        # l_mbk es una lista porque importa el orden de las variables !!!
         # El resultado es una tupla de valores
+        # sformat = '<fBhfB'
+        # rx_bytes = b'\x9a\x99\x00Bd\x18\x00\x00\x008A\xc9\xaa\xb7'
         try:
-            t_vals = unpack_from(sformat, self.rx_payload)
+            t_vals = unpack_from(sformat, rx_bytes)
         except ValueError as err:
-            self.app.logger.error( f'(462) ApiCOMMS_ERR011: No puedo UNPACK, ID={self.plcid}, sformat={sformat}, rx_payload=[{self.rx_payload}], error={err}' )
-            return False
+            self.app.logger.error( f'(554) ApiPLCR2_ERR011: No puedo UNPACK, ID={plcid},sformat={sformat},rx_payload=[{rx_bytes}],Err={err}' )
+            return None
         #
-        # 5) Genero una namedtuple con los valores anteriores y los nombres de las variables
+        # Genero una namedtuple con los valores anteriores y los nombres de las variables
         # Creo una namedtuple con la lista de nombres del rx_mbk
-        t_names = namedtuple('T_RCVD_VARS', var_names)
+        # var_names = 'UPA1_CAUDALIMETRO UPA1_STATE1 UPA1_POS_ACTUAL_6 UPA2_CAUDALIMETRO BMB_STATE18 '
+        t_names = namedtuple('t_foo', var_names)
         try:
             rx_tuple = t_names._make(t_vals)
         except ValueError:
-            self.app.logger.error( f'(463) ApiCOMMS_ERR012: No puedo generar tupla de valores, ID={self.plcid}' )
-            return False
+            self.app.logger.error( f'(555) ApiPLCR2_ERR012: No puedo generar tupla de valores, ID={plcid}' )
+            return None
         #
         # La convierto a diccionario
-        self.d_rx_payload = rx_tuple._asdict()
+        # d_rx_payload = {  'UPA1_CAUDALIMETRO': 32.150001525878906,
+        #                   'UPA1_STATE1': 100, 'UPA1_POS_ACTUAL_6': 24, 
+        #                   'UPA2_CAUDALIMETRO': 11.5,'BMB_STATE18': 201
+        #                 }
+        d_rx_payload = rx_tuple._asdict()
         if self.debug:
-            self.app.logger.info(  f'(464) ApiCOMMS_INFO: ID={self.plcid}, convert_bytes2dict,d_rx_payload={self.d_rx_payload}' )
-        return True
+            self.app.logger.info(  f'(556) ApiCOMMS_INFO: ID={self.plcid}, convert_bytes2dict OUT ,d_rx_payload={d_rx_payload}' )
+        return d_rx_payload
  
+    def check_payload_crc_valid(self, rx_bytes):
+        '''
+        Calcula el CRC del payload y lo compara el que trae.
+        El payload trae el CRC que envia el PLC en los 2 ultimos bytes
+        El payload es un bytestring
+        '''
+        crc = int.from_bytes(rx_bytes[-2:],'big')
+        calc_crc = computeCRC(rx_bytes[:-2])
+        if crc == calc_crc:
+            return True
+        else:
+            return False
+    
+    def __process_mbk__( self, l_mbk_def:list ):
+        '''
+        Toma una lista de definicion de un memblok de recepcion y genera 3 elementos:
+        -un iterable con los nombres en orden
+        -el formato a usar en la conversion de struct
+        -el largo total definido por las variables
+        '''
+        #
+        sformat = '<'
+        largo = 0
+        var_names = ''
+        for ( name, tipo, *others ) in l_mbk_def:
+            var_names += f'{name} '
+            if tipo.lower() == 'char':
+                sformat += 'c'
+                largo += 1
+            elif tipo.lower() == 'schar':
+                sformat += 'b'
+                largo += 1
+            elif tipo.lower() == 'uchar':
+                sformat += 'B'
+                largo += 1
+            elif tipo.lower() == 'short':
+                sformat += 'h'
+                largo += 2
+            elif tipo.lower() == 'int':
+                sformat += 'i'
+                largo += 4
+            elif tipo.lower() == 'float':
+                sformat += 'f'
+                largo += 4
+            elif tipo.lower() == 'unsigned':
+                sformat += 'H'
+                largo += 2
+            else:
+                sformat += '?'
+        #
+        return sformat, largo, var_names
+
+    #------------------------------------------------------
+    # DEPRECATED !!!
     def convert_dict2bytes( self, plcid, d_responses ):
         '''
         Recibo un diccionario con variables definidas en la estructura de un plc memblock.
@@ -245,54 +318,3 @@ class Memblock:
         #
         return self.tx_bytestream
 
-    def __check_payload_crc_valid__(self):
-        '''
-        Calcula el CRC del payload y lo compara el que trae.
-        El payload trae el CRC que envia el PLC en los 2 ultimos bytes
-        El payload es un bytestring
-        '''
-        crc = int.from_bytes(self.rx_payload[-2:],'big')
-        calc_crc = computeCRC(self.rx_payload[:-2])
-        if crc == calc_crc:
-            return True
-        else:
-            return False
-    
-    def __process_mbk__( self, l_mbk_def:list ):
-        '''
-        Toma una lista de definicion de un memblok de recepcion y genera 3 elementos:
-        -un iterable con los nombres en orden
-        -el formato a usar en la conversion de struct
-        -el largo total definido por las variables
-        '''
-        #
-        sformat = '<'
-        largo = 0
-        var_names = ''
-        for ( name, tipo, _) in l_mbk_def:
-            var_names += f'{name} '
-            if tipo.lower() == 'char':
-                sformat += 'c'
-                largo += 1
-            elif tipo.lower() == 'schar':
-                sformat += 'b'
-                largo += 1
-            elif tipo.lower() == 'uchar':
-                sformat += 'B'
-                largo += 1
-            elif tipo.lower() == 'short':
-                sformat += 'h'
-                largo += 2
-            elif tipo.lower() == 'int':
-                sformat += 'i'
-                largo += 4
-            elif tipo.lower() == 'float':
-                sformat += 'f'
-                largo += 4
-            elif tipo.lower() == 'unsigned':
-                sformat += 'H'
-                largo += 2
-            else:
-                sformat += '?'
-        #
-        return sformat, largo, var_names

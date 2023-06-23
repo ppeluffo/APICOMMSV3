@@ -212,7 +212,7 @@ class GetTemplate(Resource):
         #
         if s_type.upper() == 'DLG':
             if s_version.upper() == 'LATEST':
-                s_version = list(DLG_CONF_TEMPLATE.keys())[-1]
+                s_version = list(DLG_CONF_TEMPLATE.keys())[0]
         #
             if s_version not in list(DLG_CONF_TEMPLATE.keys()):
                 return {},204
@@ -223,7 +223,7 @@ class GetTemplate(Resource):
 
         if s_type.upper() == 'PLC':
             if s_version.upper() == 'LATEST':
-                s_version = list(PLC_CONF_TEMPLATE.keys())[-1]
+                s_version = list(PLC_CONF_TEMPLATE.keys())[0]
 
             if s_version not in list(PLC_CONF_TEMPLATE.keys()):
                 return {},204

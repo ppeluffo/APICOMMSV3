@@ -37,7 +37,7 @@ PGSQL_BD = os.environ.get('PGSQL_BD','bd_spcomms')
 APIDATOS_HOST = os.environ.get('APIDATOS_HOST','apidatos')
 APIDATOS_PORT = os.environ.get('APIDATOS_PORT','5300')
 
-MAX_SELECT_CHUNK_SIZE = os.environ.get(' MAX_SELECT_CHUNK_SIZE', 100)
+MAX_SELECT_CHUNK_SIZE = os.environ.get('MAX_SELECT_CHUNK_SIZE', 100)
 
 API_VERSION = 'R001 @ 2023-06-15'
 

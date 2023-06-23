@@ -94,23 +94,42 @@ PILOTO_CONF_TEMPLATE = {
 Configuraciones de dataloggers por versión:
 '''
 DLG_CONF_TEMPLATE = {
-    '1.0.9': { 'BASE': BASE_CONF_TEMPLATE['1.0.9'], 
-                'AINPUTS': AINPUTS_CONF_TEMPLATE['1.0.9'],
-                'COUNTERS': COUNTERS_CONF_TEMPLATE['1.0.9'],
-                'MODBUS': MODBUS_CONF_TEMPLATE['1.0.9']
-    },
     '1.1.0': { 'BASE': BASE_CONF_TEMPLATE['1.1.0'], 
                 'AINPUTS': AINPUTS_CONF_TEMPLATE['1.1.0'],
                 'COUNTERS': COUNTERS_CONF_TEMPLATE['1.1.0'],
                 'MODBUS': MODBUS_CONF_TEMPLATE['1.1.0'],
                 'PILOTOS': PILOTO_CONF_TEMPLATE['1.1.0']
 
+    },
+    '1.0.9': { 'BASE': BASE_CONF_TEMPLATE['1.0.9'], 
+                'AINPUTS': AINPUTS_CONF_TEMPLATE['1.0.9'],
+                'COUNTERS': COUNTERS_CONF_TEMPLATE['1.0.9'],
+                'MODBUS': MODBUS_CONF_TEMPLATE['1.0.9']
     }
 }
 
 PLC_CONF_TEMPLATE = {
-    '1.1.0': { 'MEMBLOCK':{'RCVD_MBK_DEF': [
-                              ['UPA1_CAUDALIMETRO', 'float', 0],['UPA1_STATE1', 'uchar', 1],['UPA1_POS_ACTUAL_6', 'short', 8],
+    'R2': { 'MEMBLOCK': 
+                {'CONFIGURACION': [
+                    ['ALT_MAX_TQ1', 'float', 10], ['ALT_MIN_TQ1', 'float', 2], ['PRES_ALM_1', 'short', 101],['TIMER_B2', 'short', 200]
+                    ],
+                'DATOS_PLC': [
+                    ['UPA1_CAUDALIMETRO', 'float', 0],['UPA1_STATE1', 'uchar', 1],['UPA1_POS_ACTUAL_6', 'short', 8],
+                    ['UPA2_CAUDALIMETRO', 'float', 0],['BMB_STATE18', 'uchar', 1]
+                    ],
+                'DATOS_SRV': [
+                    ['TIMESTAMP', 'short', 1, 'SYS', 'None'],
+                    ['RESET', 'short', 0, 'ATVISE', 'None'],
+                    ['UPA1_ORDER_1', 'short', 100, 'ATVISE','None'],
+                    ['UPA1_CONSIGNA_6', 'short', 2560, 'ATVISE','None'],
+                    ['ESP_ORDER_8', 'short', 200, 'ATVISE','None'], 
+                    ['ALTURA_TANQUE_KIYU_1', 'float', 0,'DL001','HTQ1'],
+                    ['ALTURA_TANQUE_KIYU_2', 'float', 0,'DL002','HTQ2']
+                    ]
+                }
+        },
+
+    'R1': { 'MEMBLOCK':{'RCVD_MBK_DEF': [
                               ['UPA2_CAUDALIMETRO', 'float', 0],['BMB_STATE18', 'uchar', 1],['BMB_STATE19', 'uchar', 1]
                             ],
              'SEND_MBK_DEF': [

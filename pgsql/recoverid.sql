@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.recoverid
     uid VARCHAR (50) COLLATE pg_catalog."default" NOT NULL,
     id VARCHAR (30) COLLATE pg_catalog."default" NOT NULL,
 
-    CONSTRAINT user_pkey PRIMARY KEY (uid)
+    CONSTRAINT recoverid_pkey PRIMARY KEY (uid)
 )
 
 TABLESPACE pg_default;
