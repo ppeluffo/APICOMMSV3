@@ -166,7 +166,7 @@ class Memblock:
         # rx_bytes = b'\x9a\x99\x00Bd\x18\x00\x00\x008A\xc9\xaa\xb7'
         try:
             t_vals = unpack_from(sformat, rx_bytes)
-        except ValueError as err:
+        except Exception as err:
             self.app.logger.error( f'(554) ApiPLCR2_ERR011: No puedo UNPACK, ID={plcid},sformat={sformat},rx_payload=[{rx_bytes}],Err={err}' )
             return None
         #
@@ -176,8 +176,8 @@ class Memblock:
         t_names = namedtuple('t_foo', var_names)
         try:
             rx_tuple = t_names._make(t_vals)
-        except ValueError:
-            self.app.logger.error( f'(555) ApiPLCR2_ERR012: No puedo generar tupla de valores, ID={plcid}' )
+        except Exception as err:
+            self.app.logger.error( f'(555) ApiPLCR2_ERR012: No puedo generar tupla de valores, ID={plcid},Err={err}' )
             return None
         #
         # La convierto a diccionario

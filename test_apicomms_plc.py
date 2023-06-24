@@ -51,9 +51,10 @@ from struct import unpack_from, pack
 from pymodbus.utilities import computeCRC
 import argparse
 import random
+import sys
 
 APICOMMS_HOST='127.0.0.1'
-APICOMMS_PORT='5500'
+APICOMMS_PORT='5000'
 
 APIREDIS_HOST='127.0.0.1'
 APIREDIS_PORT='5100'
@@ -65,7 +66,11 @@ APICONF_PORT = '5200'
 class Plc:
 
     def __init__(self):
-        self.plc_template = None
+        self.plcid = ''
+        self.plc_conf_mbk = None
+
+    def set_plcid(self,plcid):
+        self.plcid = plcid
 
     def __process_mbk__( self, l_mbk:list ):
         '''
@@ -106,32 +111,100 @@ class Plc:
         #
         return sformat, largo, var_names
 
-    def leer_plc_template(self):
+    def write_configuration(self, plcid):
         '''
         Pido a apiconf el template de la ultima version de PLC
         '''
         params = {'ver':'latest', 'type':'PLC'}
         url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/template'
         rsp = requests.get(url=url, params=params, timeout=10 )
+        if rsp.status_code != 200:
+            print('ERROR: No puedo leer template. Exit')
+            return False
+        d_template = rsp.json()['template']
+        #
+        params = {'unit':plcid}
+        url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config'
+        rsp = requests.post(url=url, params=params, json=d_template, timeout=10 )
+        if rsp.status_code != 200:
+            print('ERROR: No puedo grabar configuracion. Exit')
+            return False
+        return True
+    
+    def read_configuration(self, plcid):
+        '''
+        Pido a apiconf la configuracion del PLC
+        '''
+        params = {'unit':plcid}
+        url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config'
+        rsp = requests.get(url=url, params=params, timeout=10 )
         if rsp.status_code == 200:
-            d_template = rsp.json()['template']
-            self.plc_template = d_template
+            d_conf = rsp.json()['MEMBLOCK']
+            self.plc_conf_mbk = d_conf
             return True
         return False
 
-    def get_plc_template(self):
+    def get_configuration(self):
+        return self.plc_conf_mbk
+    
+    def generar_frame_ping(self):
         '''
+        Emula a un PLC enviando un PING al servidor
         '''
-        return self.plc_template
+        url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplc'
+        params = { 'ID':self.plcid,'VER':'1.1.0','TYPE':'PLC'}
+        data_ping = b'P\xbf|'
+        headers={'Content-Type': 'application/octet-stream'}
+        res = requests.post( url=url, params=params, data=data_ping, headers=headers)
+        print(f'PING response_code={res.status_code}')
+        print(f'PING response_content={res.content}')
+
+    def generar_frame_configuracion(self):
+        '''
+        Emula a un PLC enviando un frame de CONFIGURACION al servidor
+        Luego el servidor manda un bytestream que debo descomponer en un dict.
+        - Leo el formato del mbk (sformat)
+        - Genero la lista de nombres de las variables (var_names)
+        - Desempaco el rx_bytes con formato sformat en la tupla t_vals
+        - Genero una namedtuple con t_vals y la lista de nombres var_names
+        - La convierto a un diccionario
+        '''
+        url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplc'
+        params = { 'ID':self.plcid,'VER':'1.1.0','TYPE':'PLC'}
+        data_configuracion = b'C\xe6\xcd'
+        headers={'Content-Type': 'application/octet-stream'}
+        res = requests.post( url=url, params=params, data=data_configuracion, headers=headers)
+        print(f'CONF response_code={res.status_code}')
+        print(f'CONF response_content={res.content}')
+        #
+        # DESCOMPONGO el bytestream recibido para obtener un diccionario con las variables
+        rx_bytes = res.content
+        print(f'CONF rx_bytes={rx_bytes}')
+        #
+        # En el payload util debo eliminar el primer byte que indica el tipo de frame
+        rx_bytes = rx_bytes[1:]
+        #
+        mbk_conf = self.plc_conf_mbk['CONFIGURACION']
+        print(f'CONF mbk={mbk_conf}')
+        #
+        sformat, _ , var_names = self.__process_mbk__(mbk_conf)
+        print(f'CONF sformat={sformat}')
+        print(f'CONF var_names={var_names}')
+        #
+        t_vals = unpack_from(sformat, rx_bytes)
+        t_names = namedtuple('t_foo', var_names)
+        rx_tuple = t_names._make(t_vals)
+        rx_payload = rx_tuple._asdict()
+        print(f'CONF rx_d={rx_payload}')
 
     def generar_datalines_en_server(self):
         '''
         Si en el mbk_srv indica que deben haber datos de equipos remotos
         inserta los correspondientes datalines.
         '''   
-        mbk_datos_srv = self.plc_template['MEMBLOCK']['DATOS_SRV']
-        print(f'mbk_datos_srv={mbk_datos_srv}')
-        for item in mbk_datos_srv:
+        mbk = self.plc_conf_mbk['DATOS_SRV']
+        print(f'mbk_datos_srv={mbk}')
+        for item in mbk:
             (name,tipo,default_value,origen,rem_name) = item
             if origen in ['SYS','ATVISE']:
                 continue
@@ -159,10 +232,10 @@ class Plc:
         Genera un d_ordenes con todas las entradas del mbk_srv que indican
         que provienen del ATVISE.
         '''
-        mbk_datos_srv = self.plc_template['MEMBLOCK']['DATOS_SRV']
-        print(f'mbk_datos_srv={mbk_datos_srv}')
+        mbk = self.plc_conf_mbk['DATOS_SRV']
+        print(f'mbk_datos_srv={mbk}')
         d_ordenes = {}
-        for item in mbk_datos_srv:
+        for item in mbk:
             (name,tipo,default_value,origen,rem_name_) = item
             if origen == 'ATVISE':
                 if tipo == 'float':
@@ -182,68 +255,6 @@ class Plc:
         print('Ordenes Atvise FAIL.')
         return False
 
-    def configurar_plc_en_server(self):
-        '''
-        Graba la configuracion del PLC en el sistema
-        Genera una orden ATVISE.
-        '''
-        params = {'unit':'PLCTEST'}
-        url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config'
-        rsp = requests.post(url=url, params=params, json=self.get_plc_template(), timeout=10 )
-        if rsp.status_code == 200:
-            return True
-        return False
-    
-    def generar_frame_ping(self):
-        '''
-        Emula a un PLC enviando un PING al servidor
-        '''
-        url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplcR2'
-        params = { 'ID':'PLCTESTV2','VER':'1.1.0','TYPE':'PLC'}
-        data_ping = b'P\xe6\xcd'
-        headers={'Content-Type': 'application/octet-stream'}
-        res = requests.post( url=url, params=params, data=data_ping, headers=headers)
-        print(f'PING response_code={res.status_code}')
-        print(f'PING response_content={res.content}')
-
-    def generar_frame_configuracion(self):
-        '''
-        Emula a un PLC enviando un frame de CONFIGURACION al servidor
-        Luego el servidor manda un bytestream que debo descomponer en un dict.
-        - Leo el formato del mbk (sformat)
-        - Genero la lista de nombres de las variables (var_names)
-        - Desempaco el rx_bytes con formato sformat en la tupla t_vals
-        - Genero una namedtuple con t_vals y la lista de nombres var_names
-        - La convierto a un diccionario
-        '''
-        url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplcR2'
-        params = { 'ID':'PLCTESTV2','VER':'1.1.0','TYPE':'PLC'}
-        data_configuracion = b'C\xe6\xcd'
-        headers={'Content-Type': 'application/octet-stream'}
-        res = requests.post( url=url, params=params, data=data_configuracion, headers=headers)
-        print(f'CONF response_code={res.status_code}')
-        print(f'CONF response_content={res.content}')
-        #
-        # DESCOMPONGO el bytestream recibido para obtener un diccionario con las variables
-        rx_bytes = res.content
-        print(f'CONF rx_bytes={rx_bytes}')
-        #
-        # En el payload util debo eliminar el primer byte que indica el tipo de frame
-        rx_bytes = rx_bytes[1:]
-        #
-        mbk_conf = self.plc_template['MEMBLOCK']['CONFIGURACION']
-        print(f'CONF mbk={mbk_conf}')
-        #
-        sformat, _ , var_names = self.__process_mbk__(mbk_conf)
-        print(f'CONF sformat={sformat}')
-        print(f'CONF var_names={var_names}')
-        #
-        t_vals = unpack_from(sformat, rx_bytes)
-        t_names = namedtuple('t_foo', var_names)
-        rx_tuple = t_names._make(t_vals)
-        rx_payload = rx_tuple._asdict()
-        print(f'CONF rx_payload={rx_payload}')
-
     def generar_frame_datos(self):
         '''
         Basado en el mbk DATOS_PLC, genero valores aleatorios y armo el bytestring que envio.
@@ -253,7 +264,8 @@ class Plc:
         - Envio los datos ( agrego el header 'D' y el CRC)
         - Decodifico la respuesta ( datos/ordenes al PLC)
         '''
-        mbk_datos_plc = self.plc_template['MEMBLOCK']['DATOS_PLC']
+        # Genero los datos para enviar al server
+        mbk_datos_plc = self.plc_conf_mbk['DATOS_PLC']
         print(f'DATOS_PLC mbk={mbk_datos_plc}')
         sformat, *others = self.__process_mbk__(mbk_datos_plc)
         list_values = []
@@ -273,132 +285,34 @@ class Plc:
         print(f'DATOS_PLC sresp={tx_bytestream}')
         #
         # Transmito los datos al server
-        url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplcR2'
-        params = { 'ID':'PLCTESTV2','VER':'1.1.0','TYPE':'PLC'}
+        url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplc'
+        params = { 'ID':self.plcid,'VER':'1.1.0','TYPE':'PLC'}
         headers={'Content-Type': 'application/octet-stream'}
-        res = requests.post( url=url, params=params, data=tx_bytestream, headers=headers)
+        try:
+            res = requests.post( url=url, params=params, data=tx_bytestream, headers=headers)
+        except:
+            print('ERROR request. Exit')
+            return
+        
         print(f'DATOS_PLC response_code={res.status_code}')
+        if res.status_code != 200:
+            print('ERROR request. Exit')
+            return
+        
         print(f'DATOS_PLC response_content={res.content}')
         #
         # Proceso la respuesta (datos/ordenes)
         rx_bytes = res.content
         rx_bytes = rx_bytes[1:]
         #
-        mbk_datos_srv = self.plc_template['MEMBLOCK']['DATOS_SRV']
-        #print(f'DEBUG: mbk={mbk_datos_srv}')
+        mbk_datos_srv = self.plc_conf_mbk['DATOS_SRV']
+        print(f'DATOS_SRV mbk={mbk_datos_srv}')
         sformat, _ , var_names = self.__process_mbk__(mbk_datos_srv)
         t_vals = unpack_from(sformat, rx_bytes)
         t_names = namedtuple('t_foo', var_names)
         rx_tuple = t_names._make(t_vals)
         d_rx_datos_srv = rx_tuple._asdict()
-        print(f'DATOS datos_srv={d_rx_datos_srv}')
-
-
-
-def crear_configuracion_test_plc():
-    
-    d_conf = { 'MEMBLOCK':{
-        'RCVD_MBK_DEF': [
-            ['UPA1_CAUDALIMETRO', 'float', 0],['UPA1_STATE1', 'uchar', 1],['UPA1_POS_ACTUAL_6', 'short', 8],
-            ['UPA2_CAUDALIMETRO', 'float', 0],['BMB_STATE18', 'uchar', 1],['BMB_STATE19', 'uchar', 1]
-        ],
-        'SEND_MBK_DEF': [
-            ['UPA1_ORDER_1', 'short', 1],['UPA1_CONSIGNA_6', 'short', 2560],['ESP_ORDER_8', 'short', 200],
-            ['ALTURA_TANQUE_KIYU_1', 'float', 2560],['ALTURA_TANQUE_KIYU_2', 'float', 2560],
-            ['PRESION_ALTA_SJ1', 'float', 0],['PRESION_BAJA_SQ1', 'float', 0]
-        ],
-        'RCVD_MBK_LENGTH':15,
-        'SEND_MBK_LENGTH':24
-        },
-        'REMVARS':{
-            'DLGTEST01': [
-                ('pA', 'ALTURA_TANQUE_KIYU_1'), 
-                ('pB', 'ALTURA_TANQUE_KIYU_2')
-            ],
-            'DLGTEST02': [
-                ('pA', 'PRESION_ALTA_SJ1'), 
-                ('pB', 'PRESION_BAJA_SQ1')
-            ]
-        }
-    }
-
-    params = {'unit':'PLCTEST'}
-    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config'
-    rsp = requests.post(url=url, params=params, json=d_conf, timeout=10 )
-    if rsp.status_code == 200:
-        return True
-    return False
-
-def crear_configuracion_test_dlgs():
-
-    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/template?type=DLG&ver=latest'
-    rsp = requests.get(url=url, timeout=10 )
-    if rsp.status_code != 200:
-        return False
-    #
-    d_template = rsp.json().get('template',{})
-    #
-    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config?unit=DLGTEST01'
-    rsp = requests.post(url=url, json=d_template, timeout=10 )
-    if rsp.status_code != 200:
-        return False
-    #
-    url = f'http://{APICONF_HOST}:{APICONF_PORT}/apiconf/config?unit=DLGTEST02'
-    rsp = requests.post(url=url, json=d_template, timeout=10 )
-    if rsp.status_code != 200:
-        return False
-    #
-    return True
-
-def generar_datos_test_dlgs():
-
-    url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apicomms'
-    params = { 'ID':'',
-               'TYPE':'SPXR3',
-               'VER':'1.1.0',
-               'CLASS':'DATA',
-               'DATE':'230321',
-               'TIME':'094504',
-               'pA':1.23,
-               'pB': 2.45,
-               'bt':12.1 }
-
-    params['ID'] = 'DLGTEST01'
-    res = requests.get(url=url, params=params, timeout=10)
-    if res.status_code != 200:
-        return False
-    
-    params['ID'] = 'DLGTEST02'
-    res = requests.get(url=url, params=params, timeout=10)
-    if res.status_code != 200:
-        return False
-    
-    return True
-    
-def generar_ordenes_atvise():
-
-    orden_atvise = { 'UPA1_ORDER_1':101, 'UPA1_CONSIGNA_6': 102, 'ESP_ORDER_8': 103 }
-    params = {'unit':'PLCTEST'}
-    url = f'http://{APIREDIS_HOST}:{APIREDIS_PORT}/apiredis/ordenesatvise'
-    res = requests.post(url=url, params=params, json=orden_atvise, timeout=10)
-    if res.status_code != 200:
-        return False
-    return True
-
-def generar_datos_test_plc():
-
-    url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apiplcR2'
-    print(f'URL={url}')
-    params = { 'ID':'PLCTESTV2','VER':'1.1.0','TYPE':'PLC'}
-    data_ping = b'P\xe6\xcd'
-    data_configuracion = b'C\xe6\xcd'
-    #data_datos = 
-
-    #data = b'f\xe6\xf6Bdx\x00\xcd\xcc\x01B\x14(\x8dU'
-    headers={'Content-Type': 'application/octet-stream'}
-    res = requests.post( url=url, params=params, data=data_configuracion, headers=headers)
-    print(f'response_code={res.status_code}')
-    print(f'response_content={res.content}')
+        print(f'DATOS_SRV={d_rx_datos_srv}')
 
 def process_arguments():
     '''
@@ -408,12 +322,14 @@ def process_arguments():
     '''
 
     parser = argparse.ArgumentParser(description='Testing del sistema APICOMMSV3')
-    parser.add_argument('-c', '--config', dest='config', action='store', default='',
-                        help='Configura la unidad en el servidor (plc,dlg,none)')
     parser.add_argument('-o', '--ordenes', dest='ordenes', action='store', default='',
                         help='Genera ordenes para el PLC (atvise/datalines)')
+    parser.add_argument('-p', '--plcid', dest='plcid', action='store', default='',
+                        help='Id del PLC a usar')
     parser.add_argument('-f', '--frame', dest='frame', action='store', default='',
                         help='Frame a enviar (ping,conf,data)')
+    parser.add_argument('-v', '--verbose', dest='verbose', action='store', default='False',
+                        help='Verbosidad')
     
     args = parser.parse_args()
     d_args = vars(args)
@@ -422,35 +338,44 @@ def process_arguments():
 if __name__ == '__main__':
 
     d_args = process_arguments()
-    config_unit = d_args['config']
     frame_type = d_args['frame']
     tipo_ordenes = d_args['ordenes']
+    plc_id = d_args['plcid']
+    verbose = d_args['verbose']
+
+    if plc_id == '':
+        print('ERROR: Debe ingresar un plcid. Exit...')
+        sys.exit(0)
 
     print('Arguments:')
-    print(f'    Config={config_unit}')
     print(f'    Frame={frame_type}')
     print(f'    Ordenes={tipo_ordenes}')
+    print(f'    Plcid={plc_id}')
+    print(f'    Verbose={verbose}')
 
+    debug = bool ( verbose in ['true','TRUE','True'])
     plc=Plc()
-    plc.leer_plc_template()
+    plc.set_plcid(plc_id)
+    if not plc.read_configuration(plc_id):
+        print('Genero nueva configuracion desde template...')
+        plc.write_configuration(plc_id)
+    if debug:
+        print(f'PLC_CONF={plc.get_configuration()}')
 
-    if config_unit.upper() == 'PLC':
-        print(f'CONF plc_template={plc.get_plc_template()}')
-        plc.configurar_plc_en_server()
+    # FRAMES
+    if frame_type.upper() == 'PING':
+        plc.generar_frame_ping()
+    elif frame_type.upper() == 'CONF':
+        plc.generar_frame_configuracion()    
+    elif frame_type.upper() == 'DATOS':
+        plc.generar_frame_datos()
 
     if tipo_ordenes.upper() == 'ATVISE':
         plc.generar_orden_atvise()
     elif tipo_ordenes.upper() == 'DATALINES':
         plc.generar_datalines_en_server()
 
-    if frame_type.upper() == 'PING':
-        plc.generar_frame_ping()
 
-    if frame_type.upper() == 'CONF':
-        plc.generar_frame_configuracion()
-        
-    if frame_type.upper() == 'DATOS':
-        plc.generar_frame_datos()
         
 
 

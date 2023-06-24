@@ -2,32 +2,11 @@ version: '3.1'
 
 services:
 
-  apiplc:
+  apicomms:
     build:
-      context: ./apiplc
+      context: ./apicomms
       dockerfile: Dockerfile
-    image: spymovil/commsv3_apiplc:latest
-    ports:
-      - 5500:5500
-    logging:
-      driver: "syslog"
-      options:
-        syslog-address: "udp://127.0.0.1:514"
-        tag: "APICOMMS" 
-    depends_on:
-      - apiredis
-      - apiconf
-    environment:
-      APIREDIS_HOST: apiredis
-      APIREDIS_PORT: 5100
-      APICONF_HOST: apiconf
-      APICONF_PORT: 5200
-
-  apidlg:
-    build:
-      context: ./apidlg
-      dockerfile: Dockerfile
-    image: spymovil/commsv3_apidlg:latest
+    image: spymovil/commsv3_apicomms:latest
     ports:
       - 5000:5000
     logging:

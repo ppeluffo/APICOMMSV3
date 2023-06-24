@@ -11,6 +11,14 @@ class dlgutils:
         self.d_local_conf = None
         self.ifw_ver = 0
 
+    def str2int(self, s):
+        '''
+        Convierte un string a un nro.entero con la base correcta.
+        '''
+        if 'X' in s.upper():
+            return int(s,16)
+        return int(s)
+    
     def u_hash( self, seed, line ):
         '''
         Calculo un hash con el string pasado en line.
@@ -50,7 +58,7 @@ class dlgutils:
         VER tiene un formato tipo A.B.C.
         Lo convertimos a un numero A*100 + B*10 + C
         '''
-        return int(re.sub(r"[A-Z,a-z,.]",'',str_version))
+        return self.str2int( re.sub(r"[A-Z,a-z,.]",'',str_version))
 
     def get_hash_config_base(self, d_conf, fw_ver):
         '''
@@ -71,11 +79,11 @@ class dlgutils:
         Calculo el hash para la versión 110
         '''
         xhash = 0
-        timerpoll = int(self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
-        timerdial = int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
-        pwr_modo = int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
-        pwr_hhmm_on = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','601'))
-        pwr_hhmm_off = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2201'))
+        timerpoll = self.str2int(self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        timerdial = self.str2int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        pwr_modo = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
+        pwr_hhmm_on = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','601'))
+        pwr_hhmm_off = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2201'))
         #
         hash_str = f'[TIMERPOLL:{timerpoll:03d}]'
         xhash = self.u_hash(xhash, hash_str)
@@ -97,8 +105,8 @@ class dlgutils:
         xhash = self.u_hash(xhash, hash_str)
         #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
         #
-        samples = int(self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
-        almlevel = int(self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
+        samples = self.str2int(self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
+        almlevel = self.str2int(self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
         hash_str = f'[SAMPLES:{samples:02}]'
         xhash = self.u_hash(xhash, hash_str)
         #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
@@ -127,11 +135,11 @@ class dlgutils:
     def __get_response_base_V110__(self):
         '''
         '''
-        timerpoll = int( self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
-        timerdial = int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
-        pwr_modo = int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
-        pwr_hhmm_on = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','600'))
-        pwr_hhmm_off = int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2200'))
+        timerpoll = self.str2int( self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        timerdial = self.str2int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        pwr_modo = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
+        pwr_hhmm_on = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','600'))
+        pwr_hhmm_off = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2200'))
         if pwr_modo == 0:
             s_pwrmodo = 'CONTINUO'
         elif pwr_modo == 1:
@@ -139,8 +147,8 @@ class dlgutils:
         else:
             s_pwrmodo = 'MIXTO'
         #
-        samples = int( self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
-        almlevel = int( self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
+        samples = self.str2int( self.d_local_conf.get('BASE',{}).get('SAMPLES','1'))
+        almlevel = self.str2int( self.d_local_conf.get('BASE',{}).get('ALMLEVEL','0'))
         #
         response = 'CLASS=CONF_BASE&'
         response += f'TPOLL={timerpoll}&TDIAL={timerdial}&PWRMODO={s_pwrmodo}&PWRON={pwr_hhmm_on:04}&PWROFF={pwr_hhmm_off:04}'
@@ -169,8 +177,8 @@ class dlgutils:
         for channel in ['A0','A1','A2']:
             enable = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('NAME','X')
-            imin=int( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN','0'))
-            imax=int( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX','0'))
+            imin=self.str2int( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN','0'))
+            imax=self.str2int( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX','0'))
             mmin=float( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMIN','0'))
             mmax=float( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX','0'))
             offset=float( self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('OFFSET','0'))
@@ -199,8 +207,8 @@ class dlgutils:
         for channel in ['A0','A1','A2']:
             enable = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('ENABLE', 'FALSE')
             name = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('NAME', 'X')
-            imin = int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN', 4))
-            imax = int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX', 20))
+            imin = self.str2int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN', 4))
+            imax = self.str2int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX', 20))
             mmin = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMIN', 0.00))
             mmax = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX', 10.00))
             offset = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('OFFSET', 0.00))
@@ -233,7 +241,7 @@ class dlgutils:
             name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME','X')
             modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
             magpp=float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
-            rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+            rbsize=self.str2int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
             hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo},{rbsize}]'
             xhash = self.u_hash(xhash, hash_str)
             #print(f'DEBUG HASH COUNTERS: hash_str={hash_str}')
@@ -261,7 +269,7 @@ class dlgutils:
             name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME', 'X')
             magpp = float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP', 1.00))
             str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
-            rbsize=int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+            rbsize=self.str2int(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
             response += f'{channel}={enable},{name},{magpp},{str_modo},{rbsize}&'
         #
         response = response[:-1]
@@ -287,7 +295,7 @@ class dlgutils:
         '''
         xhash = 0
         enable=self.d_local_conf.get('MODBUS',{}).get('ENABLE','FALSE')
-        localaddr=int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR','1'))
+        localaddr=self.str2int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR','1'))
         hash_str = f'[{enable},{localaddr:02d}]'
         xhash = self.u_hash(xhash, hash_str)
         #print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
@@ -296,13 +304,13 @@ class dlgutils:
         for channel in ['M0','M1','M2','M3','M4']:
             enable = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
-            sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
-            reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
-            nro_regs=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
-            fcode=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
+            sla_addr=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
+            reg_addr=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
+            nro_regs=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
+            fcode=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
             mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
             codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
-            pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
+            pow10=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
             hash_str = f'[{channel}:{enable},{name},{sla_addr:02d},{reg_addr:04d},{nro_regs:02d},{fcode:02d},{mtype},{codec},{pow10:02d}]'
             xhash = self.u_hash(xhash, hash_str)
             #print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
@@ -325,48 +333,43 @@ class dlgutils:
         '''
         '''
         enable=self.d_local_conf.get('MODBUS',{}).get('ENABLE','FALSE')
-        localaddr=int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR',0x01))
+        localaddr=self.str2int(self.d_local_conf.get('MODBUS',{}).get('LOCALADDR','0x01'))
 
         response = f'CLASS=CONF_MODBUS&ENABLE={enable}&LOCALADDR={localaddr}&'
 
         for channel in ['M0','M1','M2','M3','M4']:
             enable = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NAME','X')
-            sla_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
-            reg_addr=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
-            nro_regs=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
-            fcode=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
+            sla_addr=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('SLA_ADDR','0'))
+            reg_addr=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('ADDR','0'))
+            nro_regs=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('NRO_RECS','0'))
+            fcode=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('FCODE','0'))
             mtype=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('TYPE','U16')
             codec=self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('CODEC','C0123')
-            pow10=int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
+            pow10=self.str2int(self.d_local_conf.get('MODBUS',{}).get(channel,{}).get('POW10','0'))
             response += f'{channel}={enable},{name},{sla_addr},{reg_addr},{nro_regs},{fcode},{mtype},{codec},{pow10}&'
         #
         response = response[:-1]
         return response
 
-    def process_data(self, app, d_payload, fw_ver):
+    def convert_dataline2dict (self, d_url_args, fw_ver):
         '''
         '''
         self.ifw_ver = self.version2int( fw_ver)
         #
         if self.ifw_ver == 110:
-            return self.__process_data_V110__(app, d_payload)
+            return self.__process_data_V110__(d_url_args)
         #
         print("(459) ApiCOMMS_ERR010: Version no soportada")  
         return None
         
-    def __process_data_V110__(self, app, d_args):
+    def __process_data_V110__(self, d_url_args):
 
         # 1) Armo el payload.
         d_payload = {}
-        ID = d_args.get('ID','NONE')
-        VER = d_args.get('VER','NONE')
-        TYPE = d_args.get('TYPE','NONE')
-        CLASS = d_args.get('CLASS','NONE')
-
-        for key in d_args:
+        for key in d_url_args:
             if key not in ('ID','TYPE','CLASS','VER'):
-                d_payload[key] = d_args.get(key)
+                d_payload[key] = d_url_args.get(key)
         #
         return d_payload
 

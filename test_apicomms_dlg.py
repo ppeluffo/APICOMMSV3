@@ -102,7 +102,7 @@ def proces_simular_dataloggers(nro_frames, lck, l_dataloggers):
             with lck:
                 nro_frames.value += 1
             #
-            url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apicomms'
+            url = f'http://{APICOMMS_HOST}:{APICOMMS_PORT}/apidlg'
             params = {'ID':uid,
                       'TYPE':'SPXR3', 
                       'VER':'1.1.0', 

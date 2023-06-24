@@ -1,3 +1,3 @@
-from apidlg import app
+from apicomms import app
 if __name__ == "__main__":
     app.run()
