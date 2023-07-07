@@ -75,18 +75,18 @@ PILOTO_CONF_TEMPLATE = {
         'ENABLE': 'FALSE',
         'PPR': '2000',
         'PWIDTH': '10',
-        'SLOT0': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT1': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT2': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT3': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT4': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT5': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT6': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT7': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT8': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT9': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT10': { 'PREF':0.0, 'TIME':'0000'},
-        'SLOT11': { 'PREF':0.0, 'TIME':'0000'},
+        'SLOT0': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT1': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT2': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT3': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT4': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT5': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT6': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT7': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT8': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT9': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT10': { 'PRES':0.0, 'TIME':'0000'},
+        'SLOT11': { 'PRES':0.0, 'TIME':'0000'},
         }    
 }
 
@@ -98,7 +98,7 @@ DLG_CONF_TEMPLATE = {
                 'AINPUTS': AINPUTS_CONF_TEMPLATE['1.1.0'],
                 'COUNTERS': COUNTERS_CONF_TEMPLATE['1.1.0'],
                 'MODBUS': MODBUS_CONF_TEMPLATE['1.1.0'],
-                'PILOTOS': PILOTO_CONF_TEMPLATE['1.1.0']
+                'PILOTO': PILOTO_CONF_TEMPLATE['1.1.0']
 
     },
     '1.0.9': { 'BASE': BASE_CONF_TEMPLATE['1.0.9'], 

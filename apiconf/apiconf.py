@@ -2,6 +2,10 @@
 '''
 Api de configuracion SQL de dataloggers y PLC para el servidor APISERVER
 
+https://www.gorgias.com/blog/prevent-idle-in-transaction-engineering
+https://4geeks.com/lesson/everything-you-need-to-start-using-sqlalchemy
+
+
 BASE DE DATOS:
 psql>CREATE DATABASE bd_unidades;
 psql>CREATE TABLE configuraciones ( pk SERIAL PRIMARY KEY, unit_id VARCHAR (20), uid VARCHAR (50), jconfig JSON);
@@ -68,7 +72,7 @@ class BD_SQL_BASE:
     def connect(self):
         # Engine
         try:
-            self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+            self.engine = create_engine(url=self.url, echo=False, isolation_level="AUTOCOMMIT", poolclass=NullPool, connect_args={'connect_timeout': 5})
         except SQLAlchemyError as err:
             app.logger.info( f'(100) ApiCONF_ERR001: Pgsql engine error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             return False 
@@ -86,10 +90,69 @@ class BD_SQL_BASE:
     def close(self):
         '''
         '''
-        #app.logger.info( f'(DEBUG) ApiCONF_INFO: Sql close and dispose R2. HOST:{PGSQL_HOST}:{PGSQL_PORT}')
+        app.logger.info( f'(DEBUG) ApiCONF_INFO: Sql close and dispose R2. HOST:{PGSQL_HOST}:{PGSQL_PORT}')
         self.conn.invalidate()
         self.conn.close()     
         self.engine.dispose()
+
+    def kill_idle_connections(self):
+        '''
+        Funcion que mata las tareas idle de la bd.
+        https://linuxhint.com/kill-idle-connections-postgresql/
+        select pid,state, usename,datname,datid from pg_stat_activity where state = 'idle' and datname=current_database()
+        '''
+        sql = '''
+        select pid from pg_stat_activity where state = 'idle' and datname=current_database() order  by pid asc
+        '''
+        query = text(sql)
+        rp = self.conn.execute(query)
+        # Dejo al menos 3 conexiones
+        i = 0
+        for row in rp.fetchall():
+            pid = row[0]
+            i += 1
+            if i < 4:
+                continue
+            print(f'DEBUG: {pid}')
+            sql = f"select pg_terminate_backend({pid})"
+            query = text(sql)
+            #_ = self.conn.execute(query)
+
+    def remove_idle_connections(self):
+        sql = '''
+        WITH inactive_connections AS (
+            SELECT pid, rank() over (partition by client_addr order by backend_start ASC) as rank
+    `   FROM pg_stat_activity
+        WHERE
+            -- Exclude the thread owned connection (ie no auto-kill)
+            pid <> pg_backend_pid( )
+        AND
+            -- Exclude known applications connections
+            application_name !~ '(?:psql)|(?:pgAdmin.+)'
+        AND
+            -- Include connections to the same database the thread is connected to
+            datname = current_database() 
+        AND
+            -- Include connections using the same thread username connection
+            usename = current_user 
+        AND
+            -- Include inactive connections only
+            state in ('idle', 'idle in transaction', 'idle in transaction (aborted)', 'disabled') 
+        AND
+            -- Include old connections (found with the state_change field)
+            current_timestamp - state_change > interval '5 minutes' 
+        )
+        SELECT pg_terminate_backend(pid)
+        FROM inactive_connections 
+        WHERE rank > 1
+        '''
+        query = text(sql)
+        try:
+            #print(sql)
+            _ = self.conn.execute(query)
+        except Exception as err:
+            app.logger.info( f'(116) ApiDATOS_ERR005: Sql exec error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
+        #
 
     def exec_sql(self, sql):
         # Ejecuta la orden sql.
@@ -175,6 +238,36 @@ class BD_SQL_BASE:
             return d_res
         #
         return d_res
+
+    def read_allunits(self):
+        '''
+        Lee todas las unidades configuradas.
+        '''
+        sql = "SELECT unit_id FROM configuraciones"
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(105) ApiCONF_ERR007: select_user FAIL')
+        return d_res
+
+class Kill(Resource):
+    def get(self):
+        bdsql = BD_SQL_BASE()
+        bdsql.connect()
+        bdsql.kill_idle_connections()
+        bdsql.close()
+        return {'rsp':'OK'},200  
+       
+class Test(Resource):
+    '''
+    Abre una conexion y la cierra.
+    '''
+    def get(self):
+        #
+        bdsql = BD_SQL_BASE()
+        bdsql.connect()
+        bdsql.remove_idle_connections()
+        bdsql.close()
+        return {'rsp':'OK'},200
 
 class Ping(Resource):
     '''
@@ -339,23 +432,20 @@ class GetAllUnits(Config):
 
     def get(self):
         '''
+        Genera un listado de todas las uniades configuradas.
         '''
         #
-        sql = "SELECT unit_id FROM configuraciones"
-        query = text(sql)
-        if self.__bd_connect__():
-            try:
-                rp = self.conn.execute(query)
-            except SQLAlchemyError as err:
-                app.logger.info( f'(111) ApiCONF_ERR003: Pgsql execute error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
-                d_rsp = {'rsp':'ERROR', 'msg':f'ApiCONF_ERR003: Pgsql connection error, HOST:{PGSQL_HOST}:{PGSQL_PORT}' }
-                self.response = d_rsp
-                self.status_code = 500
-                return self.response, self.status_code
-            finally:
-                self.conn.close()
-        else:
-            return self.response, self.status_code
+        bdsql = BD_SQL_BASE()
+        d_res =  bdsql.read_allunits()
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
+        #
+        rp = d_res.get('rp',None)
+        if rp.rowcount == 0:
+            app.logger.info( f'(110) ApiCONF_WARN001: No config rcd in SQL')
+            bdsql.close()
+            return {},204
 
         l_unidades = []
         for row in rp.fetchall():
@@ -435,6 +525,8 @@ class Help(Resource):
         }
         return d_options, 200
 
+api.add_resource( Kill, '/apiconf/kill')
+api.add_resource( Test, '/apiconf/test')
 api.add_resource( Ping, '/apiconf/ping')
 api.add_resource( Help, '/apiconf/help')
 api.add_resource( GetVersiones, '/apiconf/versiones')

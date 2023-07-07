@@ -9,6 +9,9 @@ R001 @ 2023-06-15: (commsv3_apicomms:1.1)
   innecesaria.
 - Se manejan todos los parámetros por variables de entorno
 - Se agrega un entrypoint 'ping' que permite ver si la api esta operativa
+- RESET:
+  Ulises lo guarda en ORDENES y no ORDENES_ATVISE.
+  Leo ambos y si está en ORDENES creo la correspondiente linea en ORDENES_ATVISE.
 
 
 '''
@@ -16,7 +19,7 @@ import datetime as dt
 from flask import Flask, request, make_response
 from flask_restful import Resource, reqparse
 from pymodbus.utilities import computeCRC
-from struct import pack
+import struct
 import requests
 import apiplc_utils
 from apicomms_common import Utils
@@ -40,6 +43,7 @@ class ApiPlc(Resource):
         self.d_ordenes_atvise = None
         self.url_redis = f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/"
         self.url_conf = f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/"
+        self.f_reset_unit = False
 
     def __process_ping__(self, rx_payload):
         '''
@@ -58,6 +62,7 @@ class ApiPlc(Resource):
         '''
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f"(610) ApiPLC_INFO: ID={self.ID}, CONFIGURATION frame")
+            self.app.logger.info(f"(610) ApiPLC_INFO: ID={self.ID}, D_CONF={self.mbk.configuracion_mbk}")
 
         sresp = self.mbk.convert_mbk2bytes( self.ID, self.mbk.configuracion_mbk )
         #
@@ -95,6 +100,7 @@ class ApiPlc(Resource):
         '''
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f'(620) ApiPLC_INFO: ID={self.ID}, DATA frame (reception)')
+            self.app.logger.info(f"(610) ApiPLC_INFO: ID={self.ID}, D_RCVD={self.mbk.datos_mbk}")
         
         # 1) El CRC debe ser correcto. Lo debo calcular con todos los bytes (inclusive el 'D')
         if not self.mbk.check_payload_crc_valid(rx_payload):
@@ -138,6 +144,7 @@ class ApiPlc(Resource):
         '''
         Si self.ordenes_atvise es None, leo las ordenes atvise (dict)
         Si no hay ordenes o no puedo leerlas, pongo un dict vacio.
+        ordenes es el string que leimos de la configuracion.
         '''
         if self.d_ordenes_atvise is None:
             try:
@@ -156,6 +163,12 @@ class ApiPlc(Resource):
                 self.d_ordenes_atvise = {}
         #
         val = self.d_ordenes_atvise.get(nombre, def_val)
+        # PATCH01: Es porque el RESET Ulises lo pone en ordenes y no en ordenes_atvise
+        if nombre == 'RESET':
+            if self.f_reset_unit:           # Si desde ordenes me mandaron resetear, val = 201
+                val = 201
+            if val == 201:                  # Si desde ordenes_atvise me mandaron resetear (val=201), prendo la flag.
+                self.f_reset_unit = True
         return val
     
     def __aux_generate_remote_val__(self, def_val, origen, rem_name ):
@@ -172,12 +185,13 @@ class ApiPlc(Resource):
         if r_data.status_code == 200:
             d_dataline = r_data.json()
             if self.ID == self.debug_unit_id:
-                self.app.logger.info(f'(641) ApiPLC INFO: ID={self.ID}, d_dataline={d_dataline}')
+                self.app.logger.info(f'(641) ApiPLC INFO: ID={self.ID},DLG={origen},d_dataline={d_dataline}')
         else:
             self.app.logger.info(f'(642) ApiPLC_WARN006: No dataline from {origen} , Err=({r_data.status_code}){r_data.text}')
             return def_val
         #
-        val = d_dataline.get(rem_name, def_val)
+        # SIEMPRE ESTAS VARIABLES SON FLOAT !!!!
+        val = float(d_dataline.get(rem_name, def_val))
         return val
 
     def __process_data_response__(self):
@@ -194,12 +208,34 @@ class ApiPlc(Resource):
         # Obtengo el mbk de los datos del servidor 'DATOS_SRV'
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f'(651) ApiPLC_INFO: ID={self.ID}, respuestas_mbk={self.mbk.respuestas_mbk}')
+            self.app.logger.info(f"(610) ApiPLC_INFO: ID={self.ID}, D_XMIT={self.mbk.respuestas_mbk}")
         #
         # Genero el formato para codificar los datos de la respuesta
         sformat,*others = self.mbk.__process_mbk__(self.mbk.respuestas_mbk)
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f'(652) ApiPLC_INFO: ID={self.ID}, sformat= {sformat}')
         
+        # RESET:
+        # Vemos si en 'ordenes' hay un reset.
+        try:
+            r_ordenes = requests.get(self.url_redis + 'ordenes', params={'unit':self.ID }, timeout=10 )
+        except requests.exceptions.RequestException: 
+            pass
+        #
+        if r_ordenes.status_code == 200:
+            d_ordenes = r_ordenes.json()
+            ordenes = d_ordenes.get('ordenes','')
+            if 'RESET' in ordenes:
+                self.f_reset_unit = True
+            if self.ID == self.debug_unit_id:
+                self.app.logger.info(f"(667) ApiPLC_INFO ,ID={self.ID}, ordenes={ordenes}")
+        #
+        # Borro las ordenes
+        try:
+            _ = requests.delete(self.url_redis + 'ordenes', params={'unit':self.ID}, timeout=10 )
+        except requests.exceptions.RequestException: 
+            pass
+
         # Recorro la lista de respuestas y calculo los valores de c/variable.
         list_values = []
         list_nombres = []
@@ -219,10 +255,14 @@ class ApiPlc(Resource):
         if borrar_orden_atvise:
             #app.logger.info(f'(534) ApiPLCR2 INFO: ID={self.ID}, Borrar Orden Atvise')
             try:
-                r_data = requests.delete(self.url_redis + 'ordenesatvise', params={'unit':self.ID}, timeout=10 )
+                _ = requests.delete(self.url_redis + 'ordenesatvise', params={'unit':self.ID}, timeout=10 )
             except requests.exceptions.RequestException as err: 
                 self.app.logger.info( f'(653) ApiPLC_ERR001: Read_ordenes_atvise request exception, Err:{err}')
 
+        # Si RESET entonces borro la configuracion
+        if self.f_reset_unit:
+            _ = requests.delete(self.url_redis + 'delete', params={'unit':self.ID}, timeout=10 )
+            self.app.logger.info(f"(668) ApiPLC_INFO ID={self.ID}, DELETE REDIS RCD.")
 
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f'(654) ApiPLC INFO: ID={self.ID}, list_values= {list_values}')
@@ -231,7 +271,12 @@ class ApiPlc(Resource):
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f'(655) ApiPLC INFO: ID={self.ID}, d_response= {d_response}')
         #
-        tx_bytestream = pack( sformat, *list_values)
+        try:
+            tx_bytestream = struct.pack( sformat, *list_values)
+        except struct.error as err:
+            self.app.logger.info( f'(664) ApiPLC_ERR003: pack exception, Err:{err}')
+            tx_bytestream = b'PACK_ERROR_664'    
+
         tx_bytestream = b'D' + tx_bytestream
         crc = computeCRC(tx_bytestream)
         tx_bytestream += crc.to_bytes(2,'big')
@@ -256,6 +301,8 @@ class ApiPlc(Resource):
 
         # Leo el debugdlgid
         self.debug_unit_id = utils.read_debug_id()
+
+        #self.debug_unit_id = "DNOPERF10"
         if self.ID == self.debug_unit_id:
             self.mbk.set_debug()
 
@@ -295,7 +342,7 @@ class ApiPlc(Resource):
         response = make_response(sresp)
         response.headers['Content-type'] = 'application/binary'
         #if self.ID == self.debug_unit_id:
-        self.app.logger.info(f"(664) ApiPLC_INFO: ID={self.ID}, RSP={sresp}")
+        self.app.logger.info(f"(665) ApiPLC_INFO: ID={self.ID}, RSP={sresp}")
         return response
 
 

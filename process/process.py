@@ -162,8 +162,8 @@ class BD_SQL_BASE:
             sql_online = sql_online[:-1]
             sql_online += " ON CONFLICT DO NOTHING" 
 
-            print(f'DEBUG: SQL={sql_online}')
-            print(f'Chunk {i}')
+            #print(f'DEBUG: SQL={sql_online}')
+            #print(f'Chunk {i}')
             if not self.exec_sql(sql_historica):
                 print(f"(30x) PROCESS_ERR008: BULK INSERT bdsql historica FAIL.")
             self.exec_sql('COMMIT')
@@ -201,9 +201,12 @@ def process_frames( protocolo, boundle_list ):
         sfechadata = None        
         if ddate and dtime:
             sfechadata = f'{ddate} {dtime}'
-            fechadata = dt.datetime.strptime(sfechadata, '%y%m%d %H%M%S')
-            sfechadata = fechadata.strftime("%Y-%m-%d %H:%M:%S")
-
+            try:
+                fechadata = dt.datetime.strptime(sfechadata, '%y%m%d %H%M%S')
+                sfechadata = fechadata.strftime("%Y-%m-%d %H:%M:%S")
+            except:
+                print(f'ERROR en conversion de fechaData: ddate={ddate},dtime={dtime}, ddata={d_data}')
+            
         else:
             sfechadata = sfechasys
 

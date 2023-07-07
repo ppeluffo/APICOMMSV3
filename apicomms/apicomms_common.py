@@ -27,8 +27,8 @@ class Utils:
         
         if rsp.status_code == 200:
             d = rsp.json()
-            return d.get('debugid','UDEBUG')
-            self.app.logger.debug("DEBUG_DLGID=UDEBUG")
+            debugid = d.get('debugid','UDEBUG')
+            return debugid
         else:
             self.app.logger.info(f"(701) ApiUTILS_WARN001: No debug unit, Err=({rsp.status_code}){rsp.text}")
             # Seteo uno por default.

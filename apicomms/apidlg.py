@@ -191,7 +191,7 @@ class ApiDlg(Resource):
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_base(self.d_conf, self.VER )
         if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(541) ApiDLG_INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+            self.app.logger.info(f"(541) ApiDLG_INFO ID={self.args['ID']}, Base: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_base__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_BASE&CONFIG=OK'
@@ -225,7 +225,7 @@ class ApiDlg(Resource):
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_ainputs(self.d_conf,self.VER )
         if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(551) ApiDLG_INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+            self.app.logger.info(f"(551) ApiDLG_INFO ID={self.args['ID']}, Ainputs: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_ainputs__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=OK'
@@ -259,7 +259,7 @@ class ApiDlg(Resource):
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_counters(self.d_conf,self.VER )
         if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(561) ApiDLG_INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+            self.app.logger.info(f"(561) ApiDLG_INFO ID={self.args['ID']}, Counters: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=OK'
             self.GET_response_status_code = 200
@@ -292,7 +292,7 @@ class ApiDlg(Resource):
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_modbus(self.d_conf,self.VER )
         if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(571) ApiDLG_INFO ID={self.args['ID']}, BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+            self.app.logger.info(f"(571) ApiDLG_INFO ID={self.args['ID']}, Modbus: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=OK'
             self.GET_response_status_code = 200
@@ -307,6 +307,41 @@ class ApiDlg(Resource):
         self.app.logger.info(f"(573) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
         return self.GET_response, self.GET_response_status_code
     
+    def __process_conf_piloto__(self):
+        '''
+        '''
+        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_PILOTO&HASH=0x86
+        self.parser.add_argument('HASH', type=str ,location='args', required=True)
+        self.args = self.parser.parse_args()
+        #
+        # Chequeo la configuracion
+        if self.d_conf is None:
+            self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            self.app.logger.info(f"() ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+
+        d_conf_piloto = self.d_conf.get('PILOTO',{})
+        # Calculo el hash de la configuracion de la BD.
+        bd_hash = self.dlgutils.get_hash_config_piloto( d_conf_piloto,self.VER )
+        if self.ID == self.debug_unit_id:
+            self.app.logger.info(f"() ApiDLG_INFO ID={self.args['ID']}, D_PILOTO={d_conf_piloto}")
+            self.app.logger.info(f"() ApiDLG_INFO ID={self.args['ID']}, Piloto: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=OK'
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            self.app.logger.info(f"() ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+            
+        # No coinciden: mando la nueva configuracion
+        self.GET_response = self.dlgutils.get_response_piloto(d_conf_piloto,self.VER )
+        self.GET_response_status_code = 200
+        self.__format_response__()
+        self.app.logger.info(f"() ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return self.GET_response, self.GET_response_status_code
+ 
     def __process_data__(self):
         '''
         '''
@@ -419,6 +454,9 @@ class ApiDlg(Resource):
 
         if self.CLASS == 'CONF_MODBUS':
             return self.__process_conf_modbus__()
+        
+        if self.CLASS == 'CONF_PILOTO':
+            return self.__process_conf_piloto__()
         
         self.GET_response = 'ERROR:UNKNOWN FRAME TYPE'
         self.GET_response_status_code = 200

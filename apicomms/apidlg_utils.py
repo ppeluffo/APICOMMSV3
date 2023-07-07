@@ -15,6 +15,8 @@ class dlgutils:
         '''
         Convierte un string a un nro.entero con la base correcta.
         '''
+        if not isinstance(s, str):
+            return 0
         if 'X' in s.upper():
             return int(s,16)
         return int(s)
@@ -207,8 +209,8 @@ class dlgutils:
         for channel in ['A0','A1','A2']:
             enable = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('ENABLE', 'FALSE')
             name = self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('NAME', 'X')
-            imin = self.str2int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN', 4))
-            imax = self.str2int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX', 20))
+            imin = self.str2int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN', '4'))
+            imax = self.str2int(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX', '20'))
             mmin = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMIN', 0.00))
             mmax = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX', 10.00))
             offset = float(self.d_local_conf.get('AINPUTS',{}).get(channel,{}).get('OFFSET', 0.00))
@@ -372,4 +374,71 @@ class dlgutils:
                 d_payload[key] = d_url_args.get(key)
         #
         return d_payload
+
+    def get_hash_config_piloto(self, d_conf_piloto, fw_ver):
+        '''
+        Calcula el hash de la configuracion del piloto.
+        RETURN: int
+        '''
+        #
+
+        self.d_local_conf = d_conf_piloto
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_piloto_V110__()
+        else:
+            print("ERROR: Version no soportada")
+            return -1
+
+    def __get_hash_config_piloto_V110__(self):
+        '''
+        '''
+        xhash = 0
+        #print(f'DEBUG D_CONF_PILOTO={self.d_local_conf}')
+        enable=self.d_local_conf.get('ENABLE','FALSE')
+        ppr=self.str2int(self.d_local_conf.get('PPR','1000'))
+        pwidth=self.str2int(self.d_local_conf.get('PWIDTH','10'))
+        hash_str = f'[{enable},{ppr:04d},{pwidth:02d}]'
+        xhash = self.u_hash(xhash, hash_str)
+        print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
+        #
+        for channel in range(12):
+            slot_name = f'SLOT{channel}'
+            presion = float( self.d_local_conf.get(slot_name,{}).get('PRES','0.0'))
+            timeslot = self.str2int( self.d_local_conf.get(slot_name,{}).get('TIME','0000'))
+            hash_str = f'[S{channel:02d}:{timeslot:04d},{presion:0.2f}]'
+            xhash = self.u_hash(xhash, hash_str)
+            #print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
+        # 
+        return xhash
+
+    def get_response_piloto(self, d_conf_piloto, fw_ver):
+        '''
+        Calcula la respuesta de configuracion de canales modbus
+        '''
+        self.d_local_conf = d_conf_piloto
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_response_piloto_V110__()
+        print("ERROR: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+ 
+    def __get_response_piloto_V110__(self):
+        '''
+        '''
+        enable=self.d_local_conf.get('ENABLE','FALSE')
+        ppr=self.str2int(self.d_local_conf.get('PPR','1000'))
+        pwidth=self.str2int(self.d_local_conf.get('PWIDTH','10'))
+        response = f'CLASS=CONF_PILOTO&ENABLE={enable}&PULSEXREV={ppr}&PWIDTH={pwidth}&'
+        #
+        for channel in range(12):
+            slot_name = f'SLOT{channel}'
+            presion = float( self.d_local_conf.get(slot_name,{}).get('PRES','0.0'))
+            timeslot = self.str2int( self.d_local_conf.get(slot_name,{}).get('TIME','0000'))
+            response += f'S{channel}={timeslot:04d},{presion:0.2f}&'
+        #
+        response = response[:-1]
+        return response
 
