@@ -74,6 +74,7 @@ b'f\xe6\xf6Bdx\x00\xcd\xcc\x01B\x14(\x8dU'
 from collections import namedtuple
 from struct import unpack_from, pack
 from pymodbus.utilities import computeCRC
+import numpy as np
 
 class Memblock:
     ''' Defino los objetos memblock que se usan en las comunicaciones de los PLC '''
@@ -121,6 +122,12 @@ class Memblock:
         # Genero una lista con los valores
         # Obtengo [10, 2, 101, 200]
         list_values = [ k for (i,j,k) in l_mbk ]
+        #
+        ### AJUSTE: 2023-07-12:
+        ### Ajusto el valor al tipo que espero en sformat.
+        for i,(fmt,value) in enumerate(zip( sformat[1:], list_values)):
+            new_val = self.__convert_val2format__(fmt,value)
+            list_values[i] = new_val
         #
         if self.debug:
             self.app.logger.info(  f'(551) ApiPLCR2_INFO: ID={plcid},sformat={sformat},list_values={list_values}' )
@@ -241,6 +248,18 @@ class Memblock:
                 sformat += '?'
         #
         return sformat, largo, var_names
+
+    def __convert_val2format__(self,fmt,val):
+        '''
+        Me aseguro que el valor corresponda con el formato
+        '''
+        if fmt == 'h':
+            return np.int16(val)
+        if fmt == 'i':
+            return np.int32(val)
+        if fmt == 'f':
+            return np.float32(val)
+        return val
 
     #------------------------------------------------------
     # DEPRECATED !!!

@@ -159,8 +159,9 @@ class ApiPlc(Resource):
                 if self.ID == self.debug_unit_id:
                     self.app.logger.info(f"(631) ApiPLC_INFO: ID={self.ID}, D_ORDENES_ATVISE={self.d_ordenes_atvise}")
             else:
-                self.app.logger.info(f"(632) ApiPLC_WARN005: No hay ordenes_atvise,ID={self.ID}, Err=({r_data.status_code}){r_data.text}")
                 self.d_ordenes_atvise = {}
+                if self.ID == self.debug_unit_id:
+                    self.app.logger.info(f"(632) ApiPLC_WARN005: No hay ordenes_atvise,ID={self.ID}, Err=({r_data.status_code}){r_data.text}")    
         #
         val = self.d_ordenes_atvise.get(nombre, def_val)
         # PATCH01: Es porque el RESET Ulises lo pone en ordenes y no en ordenes_atvise

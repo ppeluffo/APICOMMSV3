@@ -1,0 +1,7 @@
+2023-07-12:
+* En apicomms:apiplc_utils, en la funcion mbk.convert_mbk2bytes agregamos que
+controle los valores de acuerdo a los formatos para que luego la función pack
+no de errores.
+Para esto requiere de numpy.
+* Rehago la imagen base para que el python tenga ahora numpy. ( lo agrego en Requirements.txt)
+-------------------------------------------------------------------------------------------------
