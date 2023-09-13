@@ -2,6 +2,9 @@
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
+R002 @ 2023-09-13: (commsv3_apicomms:1.2)
+- Agrego a la configuracion las consignas
+
 R001 @ 2023-06-15: (commsv3_apicomms:1.1)
 - Se modifica el procesamiento de frames de modo que al procesar uno de DATA sea
   como los PING, no se lee la configuracion ya que no se necesita y genera carga
@@ -319,29 +322,64 @@ class ApiDlg(Resource):
             self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=ERROR' 
             self.GET_response_status_code = 200
             self.__format_response__()
-            self.app.logger.info(f"() ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            self.app.logger.info(f"(590) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
             return self.GET_response, self.GET_response_status_code
 
         d_conf_piloto = self.d_conf.get('PILOTO',{})
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.dlgutils.get_hash_config_piloto( d_conf_piloto,self.VER )
         if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"() ApiDLG_INFO ID={self.args['ID']}, D_PILOTO={d_conf_piloto}")
-            self.app.logger.info(f"() ApiDLG_INFO ID={self.args['ID']}, Piloto: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+            self.app.logger.info(f"(591) ApiDLG_INFO ID={self.args['ID']}, D_PILOTO={d_conf_piloto}")
+            self.app.logger.info(f"(592) ApiDLG_INFO ID={self.args['ID']}, Piloto: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=OK'
             self.GET_response_status_code = 200
             self.__format_response__()
-            self.app.logger.info(f"() ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            self.app.logger.info(f"(593) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
             return self.GET_response, self.GET_response_status_code
             
         # No coinciden: mando la nueva configuracion
         self.GET_response = self.dlgutils.get_response_piloto(d_conf_piloto,self.VER )
         self.GET_response_status_code = 200
         self.__format_response__()
-        self.app.logger.info(f"() ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
         return self.GET_response, self.GET_response_status_code
  
+    def __process_conf_consigna__(self):
+        '''
+        '''
+        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_PILOTO&HASH=0x86
+        self.parser.add_argument('HASH', type=str ,location='args', required=True)
+        self.args = self.parser.parse_args()
+        #
+        # Chequeo la configuracion
+        if self.d_conf is None:
+            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            self.app.logger.info(f"(600) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+
+        d_conf_consigna = self.d_conf.get('CONSIGNA',{})
+        # Calculo el hash de la configuracion de la BD.
+        bd_hash = self.dlgutils.get_hash_config_consigna( d_conf_consigna,self.VER )
+        if self.ID == self.debug_unit_id:
+            self.app.logger.info(f"(601) ApiDLG_INFO ID={self.args['ID']}, D_CONSIGNA={d_conf_consigna}")
+            self.app.logger.info(f"(602) ApiDLG_INFO ID={self.args['ID']}, Consigna: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=OK'
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            self.app.logger.info(f"(603) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+            
+        # No coinciden: mando la nueva configuracion
+        self.GET_response = self.dlgutils.get_response_consigna(d_conf_consigna,self.VER )
+        self.GET_response_status_code = 200
+        self.__format_response__()
+        self.app.logger.info(f"(604) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return self.GET_response, self.GET_response_status_code
+
     def __process_data__(self):
         '''
         '''
@@ -457,6 +495,9 @@ class ApiDlg(Resource):
         
         if self.CLASS == 'CONF_PILOTO':
             return self.__process_conf_piloto__()
+        
+        if self.CLASS == 'CONF_CONSIGNA':
+            return self.__process_conf_consigna__()
         
         self.GET_response = 'ERROR:UNKNOWN FRAME TYPE'
         self.GET_response_status_code = 200

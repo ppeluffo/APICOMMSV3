@@ -442,3 +442,52 @@ class dlgutils:
         response = response[:-1]
         return response
 
+    def get_hash_config_consigna(self, d_conf_consigna, fw_ver):
+        '''
+        Calcula el hash de la configuracion del consigna.
+        RETURN: int
+        '''
+        #
+
+        self.d_local_conf = d_conf_consigna
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_consigna_V110__()
+        else:
+            print("ERROR: Version no soportada")
+            return -1
+
+    def __get_hash_config_consigna_V110__(self):
+        '''
+        '''
+        xhash = 0
+        #print(f'DEBUG D_CONF_CONSIGNA={self.d_local_conf}')
+        enable=self.d_local_conf.get('ENABLE','FALSE')
+        c_diurna = self.d_local_conf.get('DIURNA','630')
+        c_nocturna = self.d_local_conf.get('NOCTURNA','2330')
+        hash_str = f'[{enable},{c_diurna},{c_nocturna}]'
+        xhash = self.u_hash(xhash, hash_str)
+        print(f'DEBUG HASH CONSIGNA: hash_str={hash_str}{xhash}')
+        return xhash
+
+    def get_response_consigna(self, d_conf_consigna, fw_ver):
+        '''
+        Calcula la respuesta de configuracion de canales modbus
+        '''
+        self.d_local_conf = d_conf_consigna
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if self.ifw_ver == 110:
+            return self.__get_response_consigna_V110__()
+        print("ERROR: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+ 
+    def __get_response_consigna_V110__(self):
+        '''
+        '''
+        enable=self.d_local_conf.get('ENABLE','FALSE')
+        c_diurna = self.d_local_conf.get('DIURNA','630')
+        c_nocturna = self.d_local_conf.get('NOCTURNA','2330')
+        response = f'CLASS=CONF_CONSIGNA&ENABLE={enable}&DIURNA={c_diurna}&NOCTURNA={c_nocturna}'
+        return response

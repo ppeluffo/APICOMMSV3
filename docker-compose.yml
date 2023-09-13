@@ -12,7 +12,7 @@ services:
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://127.0.0.1:514"
+        syslog-address: "udp://192.168.0.20:514"
         tag: "APICOMMS" 
     depends_on:
       - apiredis
@@ -33,7 +33,7 @@ services:
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://127.0.0.1:514"
+        syslog-address: "udp://192.168.0.9:514"
         tag: "APICOMMS"
     depends_on:
       - pgsql
@@ -54,7 +54,7 @@ services:
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://127.0.0.1:514"
+        syslog-address: "udp://192.168.0.9:514"
         tag: "APICOMMS"
     depends_on:
       - pgsql
@@ -78,7 +78,7 @@ services:
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://127.0.0.1:514"
+        syslog-address: "udp://192.168.0.9:514"
         tag: "APICOMMS" 
     depends_on:
       - redis
@@ -117,7 +117,7 @@ services:
     logging:
       driver: "syslog"
       options:
-        syslog-address: "udp://127.0.0.1:514"
+        syslog-address: "udp://192.168.0.9:514"
         tag: "APICOMMS"
     depends_on:
       - pgsql

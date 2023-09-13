@@ -324,8 +324,8 @@ class ApiPlc(Resource):
         
         # Proceso el frame de acuerdo a su tipo: ('P':0x50:80:Ping, 'C':0x43:67:Config, 'D':0x44:68:Data )
         rx_payload = request.get_data()
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(662) ApiPLC_INFO: ID={self.args['ID']}, rx_payload={rx_payload}")
+        #if self.ID == self.debug_unit_id:
+        self.app.logger.info(f"(662) ApiPLC_INFO: ID={self.args['ID']}, rx_payload={rx_payload}")
         #
         id_frame = rx_payload[0]
         if id_frame == 80:

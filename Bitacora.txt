@@ -1,3 +1,7 @@
+2023-08-15:
+SMSdaemon requiere pySerial. Lo agrego al Requirements.txt.
+La nueva imágen pesa:
+-------------------------------------------------------------------------------------------------
 2023-07-12:
 * En apicomms:apiplc_utils, en la funcion mbk.convert_mbk2bytes agregamos que
 controle los valores de acuerdo a los formatos para que luego la función pack
