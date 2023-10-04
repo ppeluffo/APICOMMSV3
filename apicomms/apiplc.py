@@ -345,5 +345,3 @@ class ApiPlc(Resource):
         #if self.ID == self.debug_unit_id:
         self.app.logger.info(f"(665) ApiPLC_INFO: ID={self.ID}, RSP={sresp}")
         return response
-
-

@@ -19,10 +19,13 @@ from flask import Flask
 from flask_restful import Resource, Api
 from apidlg import ApiDlg
 from apiplc import ApiPlc
+from apioceanus import ApiOceanus
 
 app = Flask(__name__)
 api = Api(app)
  
+API_VERSION = 'R002 @ 2023-09-26'
+
 APIREDIS_HOST = os.environ.get('APIREDIS_HOST', 'apiredis')
 APIREDIS_PORT = os.environ.get('APIREDIS_PORT', '5100')
 APICONF_HOST = os.environ.get('APICONF_HOST', 'apiconf')
@@ -33,7 +36,6 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 #APIREDIS_PORT = '5100'
 #APICONF_HOST = '127.0.0.1'
 #APICONF_PORT = '5200'
-API_VERSION = 'R002 @ 2023-09-13'
 
 servers = {
    'APIREDIS_HOST': APIREDIS_HOST,
@@ -86,6 +88,7 @@ class Help(Resource):
 
 api.add_resource( ApiPlc, '/apiplc', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( ApiDlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
+api.add_resource( ApiOceanus, '/apioceanus', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( Help,   '/apicomms/help')
 api.add_resource( Ping,   '/apicomms/ping')
 

@@ -438,7 +438,16 @@ class ApiDlg(Resource):
         self.parser.add_argument('TYPE', type=str ,location='args', required=True)
         self.parser.add_argument('VER', type=str ,location='args', required=True)
         self.parser.add_argument('CLASS', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
+        try:
+            self.args = self.parser.parse_args()
+        except:
+            self.app.logger.info("(590) ERROR ApiDLG_QS=%(a)s", {'a': request.query_string })
+            self.GET_response = 'ERROR:FAIL TO PARSE'
+            self.GET_response_status_code = 500
+            self.__format_response__()
+            self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+
         self.ID = self.args['ID']
         self.VER = self.args['VER']
         self.TYPE = self.args['TYPE']

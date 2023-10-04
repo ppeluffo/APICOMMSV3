@@ -8,6 +8,13 @@ Se hace una paginacion de los elementos enviados a c/cliente.
 Cada peticion del cliente se le manda un nuevo chunk a partir del ultimo solicitado.
 
 -----------------------------------------------------------------------------
+R001 @ 2023-10-02 (commsv3_apidatos:1.2)
+- Agrego al manejo de la BD 2 funciones que lean los usuarios ( read_usuarios) y 
+  las configuraciones (read_configuraciones) y devuelvan un iterador.
+- Agrego 2 entrypoint a la clase: ConfiguracionUsuarios, ConfiguracionEquipos 
+  asociados a las entradas anteriores a la BD.
+
+-----------------------------------------------------------------------------
 R001 @ 2023-06-14 (commsv3_apidatos:1.1)
 - Se manejan todos los parámetros por variables de entorno
 - Se agrega un entrypoint 'ping' que permite ver si la api esta operativa
@@ -143,6 +150,28 @@ class BD_SQL_BASE:
             app.logger.info( '(209) ApiDATOS_ERR009: read data chunk FAIL')
         return d_res
 
+    def read_usuarios(self):
+        '''
+        Lee todos los usuarios de la tabla usuarios.
+        RETORNA: d_res = {'res':True,'rp':rp }
+        '''
+        sql = f"SELECT user_id,fecha_ultimo_acceso,data_ptr FROM usuarios"
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(211) ApiDATOS_ERR009: read usuarios FAIL')
+        return d_res
+    
+    def read_configuraciones_equipos(self):
+        '''
+        Lee todos las configuraciones de la tabla configuraciones.
+        RETORNA: d_res = {'res':True,'rp':rp }
+        '''
+        sql = f"SELECT unit_id,uid,jconfig FROM configuraciones" 
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(212) ApiDATOS_ERR009: read dconfiguraciones FAIL')
+        return d_res
+     
     def update_user(self, user_id, pk):
         '''
         Actualiza al usuario con la ultima consulta de datos.
@@ -309,10 +338,83 @@ class Help(Resource):
         }
         return d_options, 200
 
+class ConfiguracionUsuarios(Resource):
+    '''
+    Implementa el acceso a todos los datos de usuarios.
+    Es con el fin de manejar el respaldo de estos.
+    '''
+    def get(self):
+        '''
+        Lectura de todos los usuarios de la BD
+        '''
+        bdsql = BD_SQL_BASE()
+        # Leo los datos
+        d_res = bdsql.read_usuarios()
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
+        #
+        rp = d_res.get('rp',None)
+        # No hat datos
+        if rp.rowcount == 0:
+            bdsql.close()
+            return {},204
+        #
+        # Armo una lista con un diccionario de c/usuario para devolver
+        l_results = []
+        rows = rp.fetchall()
+        for row in rows:
+            user_id = row[0]
+            # Debo convertirla a string si quiero luego usarla en json sin problemas
+            fecha_ultimo_acceso = row[1].strftime("%Y-%m-%d %H:%M:%S")
+            data_ptr = row[2]
+            d = { 'user_id':user_id, 'fecha_ultimo_acceso':fecha_ultimo_acceso, 'data_ptr':data_ptr}
+            l_results.append(d)
+        #
+        bdsql.close()
+        return {'l_usuarios':l_results }, 200
+
+class ConfiguracionEquipos(Resource):
+    '''
+    Implementa el acceso a todos los datos de configuracion de equipos.
+    Es con el fin de manejar el respaldo de estos.
+    '''
+    def get(self):
+        '''
+        Lectura de todos las configuraciones de equipos de la BD
+        '''
+        # leo los datos
+        bdsql = BD_SQL_BASE()
+        d_res = bdsql.read_configuraciones_equipos()
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
+        #
+        rp = d_res.get('rp',None)
+        # No hat datos
+        if rp.rowcount == 0:
+            bdsql.close()
+            return {},204
+        #
+        # Armo una lista con un diccionario de c/usuario para devolver
+        l_results = []
+        rows = rp.fetchall()
+        for row in rows:
+            unit_id = row[0]
+            uid = row[1]
+            jconfig = row[2]
+            d = { 'unit_id':unit_id, 'uid':uid, 'jconfig':jconfig }
+            l_results.append(d)
+        #
+        bdsql.close()
+        return {'l_equipos':l_results }, 200
+
 api.add_resource( Ping, '/apidatos/ping')
 api.add_resource( Help, '/apidatos/help')
 api.add_resource( Usuarios, '/apidatos/usuarios')
 api.add_resource( Datos, '/apidatos/datos')
+api.add_resource( ConfiguracionUsuarios, '/apidatos/config/usuarios')
+api.add_resource( ConfiguracionEquipos, '/apidatos/config/equipos')
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')

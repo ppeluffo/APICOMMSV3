@@ -1,0 +1,46 @@
+version: '3.1'
+
+services:
+
+  pgsql:
+    build:
+      context: ./pgsql
+      dockerfile: Dockerfile
+    image: spymovil/commsv3_pgsql:latest
+    restart: always
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: pexco599
+      POSTGRES_DB: bd_spcomms
+    volumes:
+      - ./datos:/var/lib/postgresql/data
+
+  bkprocess:
+    build:
+      context: ./bkprocess
+      dockerfile: Dockerfile
+    image: spymovil/bkprocess:latest
+    restart: always
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.9:514"
+        tag: "APICOMMS"
+    depends_on:
+      - pgsql
+    environment:
+      MAX_INSERTS_CHUNK_SIZE: 100
+      SLEEP_TIME: 15
+      APIDATOS_HOST: '192.168.0.8'
+      APIDATOS_PORT: '5300'
+      APIDATOS_USERKEY: "RMNC3O96SJ1DZH700DZ8"
+      PGSQL_HOST: pgsql
+      PGSQL_PORT: 5432
+      PGSQL_USER: admin
+      PGSQL_PASSWD: pexco599
+      PGSQL_BD: bd_spcomms
+      
+
+

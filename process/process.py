@@ -10,6 +10,10 @@ subproceso para c/u.
 Luego duerme 60s.
 
 -----------------------------------------------------------------------------
+R001 @ 2023-09-26 (commsv3_process:1.3)
+- Agrego los elementos para procesar los datos de las estaciones OCEANUS
+- Modifico exec_sql para que devuelva un cursor.
+-----------------------------------------------------------------------------
 R001 @ 2023-06-17 (commsv3_process:1.2)
 - Hago modificaciones para hacer insert bulk en la pgsql en vez de insertar
   de a 1 fila.
@@ -49,7 +53,7 @@ PGSQL_USER = os.environ.get('PGSQL_USER', 'admin')
 PGSQL_PASSWD = os.environ.get('PGSQL_PASSWD','pexco599')
 PGSQL_BD = os.environ.get('PGSQL_BD', 'bd_spcomms')
 
-VERSION = 'R001 @ 2023-06-17'
+VERSION = 'R001 @ 2023-09-26'
 
 class BD_SQL_BASE:
 
@@ -100,11 +104,11 @@ class BD_SQL_BASE:
         #
         try:
             #print(sql)
-            _ = self.conn.execute(query)
+            cursor = self.conn.execute(query)
         except Exception as err:
             print( f'(305) PROCESS_ERR005: Sql exec error, HOST:{PGSQL_HOST}:{PGSQL_PORT}, Err:{err}')
             return False
-        return True
+        return cursor
 
     def insert_raw(self, unit_id, key, value, datetime):
         '''
@@ -172,7 +176,30 @@ class BD_SQL_BASE:
                 print(f"(30x) PROCESS_ERR008: BULK INSERT bdsql online FAIL.")
             self.exec_sql('COMMIT')      
             #
-            
+
+    def read_usuarios(self):
+        '''
+        Retorna todos los datos de la tabla de usuario
+        '''
+        sql = f"SELECT * FROM usuarios ORDER BY data_ptr ASC" 
+        cursor = self.exec_sql(sql)
+        if not cursor:
+            print(f"(30x) PROCESS_ERR008: SELECT bdsql FAIL !! sql={sql}")
+            return False
+        return cursor
+        
+    def update_online(self,idx):
+        '''
+        Borra los registros de tb_online hasta el idx
+        Si idx=-1, borro todos los registros.
+        '''
+        if idx == -1:
+            sql = f"DELETE FROM online" 
+        else:    
+            sql = f"DELETE FROM online WHERE id < {idx}" 
+        _ = self.exec_sql(sql)
+        self.conn.commit()
+
 def clt_C_handler(signum, frame):
     sys.exit(0)
 
@@ -204,9 +231,10 @@ def process_frames( protocolo, boundle_list ):
             try:
                 fechadata = dt.datetime.strptime(sfechadata, '%y%m%d %H%M%S')
                 sfechadata = fechadata.strftime("%Y-%m-%d %H:%M:%S")
-            except:
-                print(f'ERROR en conversion de fechaData: ddate={ddate},dtime={dtime}, ddata={d_data}')
-            
+            except Exception as err:
+                print(f'ERROR en conversion de fechaData: ddate={ddate},dtime={dtime},ddata={d_data}')
+                print(f'ERROR: {err}')
+        
         else:
             sfechadata = sfechasys
 
@@ -256,14 +284,52 @@ def read_data_queue(count):
     d_resp = r_conf.json()
     l_datos = d_resp.get('ldatos',[])
     return l_datos
-          
+
+def housekeeping_online():
+    '''
+    Mantiene la tabla online en un minimo
+    '''      
+    bdsql = BD_SQL_BASE()
+    cursor = bdsql.read_usuarios()
+    if not cursor:
+        print(f"(315) PROCESS_ERR009: No puedo leer tb_usuarios !!")
+        return
+    #
+    l_dates = []
+    l_idx = []
+    idx = []
+    now=dt.datetime.now()
+    for t in cursor:
+        l_dates.append(t[1])
+        l_idx.append(t[2])
+    # Solo considero aquellos que hayan tenido actividad en los ultimos 3 dias ( 72 horas)
+    for i,date in enumerate(l_dates):
+        deltatime = (now - date).total_seconds()/3600
+        #print(f"{date},delta={deltatime}")
+        if deltatime < 72:
+            idx.append(l_idx[i])
+    #
+    #print(f"DEBUG PROCESS: L_IDX={l_idx},IDX={idx}")
+    rcd_id = -1
+    if len(idx) > 0:
+        rcd_id = min(idx)
+        
+    bdsql.update_online(rcd_id)
+    print(f'PROCESS: housekeeping online delete from:{rcd_id} !!')
+
 if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, clt_C_handler)
 
-    #APIREDIS_HOST = '127.0.0.1'
-    #PGSQL_HOST = '127.0.0.1'
-
+    '''
+    APIREDIS_HOST = '127.0.0.1'
+    APIREDIS_PORT = '5100'
+    PGSQL_HOST = '127.0.0.1'
+    PGSQL_PORT = '5432'
+    PGSQL_USER = 'admin'
+    PGSQL_PASSWD = 'pexco599'
+    PGSQL_BD = 'bd_spcomms'
+    '''
     print("APICOMMS PROCESS Starting...Waiting 60 secs....")
     print(f'-SLEEP_TIME={SLEEP_TIME}')
     print(f'-MAX_DEQUEUE_ITEMS={MAX_DEQUEUE_ITEMS}')
@@ -282,6 +348,7 @@ if __name__ == '__main__':
             #print(f'DEBUG: L_DATOS={l_datos}')
             dlg_list = []
             plc_list = []
+            oceanus_list = []
             # Separo los datos de c/tipo en una lista distinta
             for element in l_datos:
                 tipo = element.get('TYPE','UNKNOWN')
@@ -292,16 +359,32 @@ if __name__ == '__main__':
                     dlg_list.append({'id':id, 'd_line':d_line})
                 elif 'PLC' in tipo:
                     plc_list.append({'id':id, 'd_line':d_line})
+                elif 'OCEANUS' in tipo:
+                    oceanus_list.append({'id':id, 'd_line':d_line})
             #
+            process_list = []
             # Proceso las listas
             if len(dlg_list) > 0:
                 p1 = Process(target = process_frames, args = ('DLG', dlg_list))
                 p1.start()
+                process_list.append(p1)
             #
             if len(plc_list) > 0:
                 p2 = Process(target = process_frames, args = ('PLC', plc_list))
                 p2.start()
-        #
+                process_list.append(p2)
+            #
+            if len(oceanus_list) > 0:
+                p3 = Process(target = process_frames, args = ('OCEANUS', oceanus_list))
+                p3.start()
+                process_list.append(p3)
+            #
+            # Espero a que terminen los procesos
+            for p in process_list:
+                p.join()
+            #
+            # Ajusto la tabla online
+            housekeeping_online()
         #
         time.sleep(SLEEP_TIME)
     #
