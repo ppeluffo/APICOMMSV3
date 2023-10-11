@@ -32,10 +32,12 @@ APICONF_HOST = os.environ.get('APICONF_HOST', 'apiconf')
 APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
-#APIREDIS_HOST = '127.0.0.1'
-#APIREDIS_PORT = '5100'
-#APICONF_HOST = '127.0.0.1'
-#APICONF_PORT = '5200'
+"""
+APIREDIS_HOST = '127.0.0.1'
+APIREDIS_PORT = '5100'
+APICONF_HOST = '127.0.0.1'
+APICONF_PORT = '5200'
+"""
 
 servers = {
    'APIREDIS_HOST': APIREDIS_HOST,
@@ -43,6 +45,7 @@ servers = {
    'APICONF_HOST' : APICONF_HOST,
    'APICONF_PORT' : APICONF_PORT
 }
+
 
 class Ping(Resource):
     '''

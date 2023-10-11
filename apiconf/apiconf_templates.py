@@ -90,6 +90,14 @@ PILOTO_CONF_TEMPLATE = {
         }    
 }
 
+CONSIGNA_CONF_TEMPLATE = {
+    '1.1.0': {
+        'ENABLE': 'TRUE',
+        'DIURNA': '730',
+        'NOCTURNA': '2300'
+    }
+
+}
 '''
 Configuraciones de dataloggers por versión:
 '''
@@ -98,7 +106,8 @@ DLG_CONF_TEMPLATE = {
                 'AINPUTS': AINPUTS_CONF_TEMPLATE['1.1.0'],
                 'COUNTERS': COUNTERS_CONF_TEMPLATE['1.1.0'],
                 'MODBUS': MODBUS_CONF_TEMPLATE['1.1.0'],
-                'PILOTO': PILOTO_CONF_TEMPLATE['1.1.0']
+                'PILOTO': PILOTO_CONF_TEMPLATE['1.1.0'],
+                'CONSIGNA': CONSIGNA_CONF_TEMPLATE['1.1.0']
 
     },
     '1.0.9': { 'BASE': BASE_CONF_TEMPLATE['1.0.9'], 

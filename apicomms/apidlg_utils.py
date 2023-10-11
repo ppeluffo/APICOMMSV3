@@ -442,6 +442,7 @@ class dlgutils:
         response = response[:-1]
         return response
 
+
     def get_hash_config_consigna(self, d_conf_consigna, fw_ver):
         '''
         Calcula el hash de la configuracion del consigna.
@@ -464,9 +465,9 @@ class dlgutils:
         xhash = 0
         #print(f'DEBUG D_CONF_CONSIGNA={self.d_local_conf}')
         enable=self.d_local_conf.get('ENABLE','FALSE')
-        c_diurna = self.d_local_conf.get('DIURNA','630')
-        c_nocturna = self.d_local_conf.get('NOCTURNA','2330')
-        hash_str = f'[{enable},{c_diurna},{c_nocturna}]'
+        c_diurna = self.str2int( self.d_local_conf.get('DIURNA','630'))
+        c_nocturna = self.str2int( self.d_local_conf.get('NOCTURNA','2330'))
+        hash_str = f'[{enable},{c_diurna:04d},{c_nocturna:04d}]'
         xhash = self.u_hash(xhash, hash_str)
         print(f'DEBUG HASH CONSIGNA: hash_str={hash_str}{xhash}')
         return xhash

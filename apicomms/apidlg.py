@@ -345,6 +345,7 @@ class ApiDlg(Resource):
         self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
         return self.GET_response, self.GET_response_status_code
  
+
     def __process_conf_consigna__(self):
         '''
         '''
