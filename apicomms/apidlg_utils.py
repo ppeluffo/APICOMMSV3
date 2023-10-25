@@ -68,8 +68,10 @@ class dlgutils:
         RETURN: int
         '''
         self.d_local_conf = d_conf
+        #print(f"DEBUG: self.d_local_conf={self.d_local_conf}")
         self.ifw_ver = self.version2int( fw_ver)
-        #
+        #print(f"DEBUG: self.ifw_ver={self.ifw_ver}")
+
         if self.ifw_ver == 110:
             return self.__get_hash_config_base_V110__()
         else:
@@ -128,9 +130,10 @@ class dlgutils:
         #
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
-        #
+        #       
         if self.ifw_ver == 110:
             return self.__get_response_base_V110__()
+        
         print("ERROR: Version no soportada")
         return 'ERROR:UNKNOWN VERSION'
 
@@ -138,7 +141,9 @@ class dlgutils:
         '''
         '''
         timerpoll = self.str2int( self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        #print(f'DEBUG::timerpoll={timerpoll}')
         timerdial = self.str2int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        #print(f'DEBUG::timerdial={timerdial}')
         pwr_modo = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
         pwr_hhmm_on = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','600'))
         pwr_hhmm_off = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2200'))
@@ -154,7 +159,8 @@ class dlgutils:
         #
         response = 'CLASS=CONF_BASE&'
         response += f'TPOLL={timerpoll}&TDIAL={timerdial}&PWRMODO={s_pwrmodo}&PWRON={pwr_hhmm_on:04}&PWROFF={pwr_hhmm_off:04}'
-        response += f'&SAMPLES={samples}&ALMLEVEL={almlevel}'  
+        response += f'&SAMPLES={samples}&ALMLEVEL={almlevel}'
+        #print(f'DEBUG::response={response}')
         return response
     
     def get_hash_config_ainputs(self, d_conf, fw_ver):
@@ -325,7 +331,7 @@ class dlgutils:
         '''
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
-        #
+        #     
         if self.ifw_ver == 110:
             return self.__get_response_modbus_V110__()
         print("ERROR: Version no soportada")  
@@ -442,7 +448,6 @@ class dlgutils:
         response = response[:-1]
         return response
 
-
     def get_hash_config_consigna(self, d_conf_consigna, fw_ver):
         '''
         Calcula el hash de la configuracion del consigna.
@@ -469,7 +474,7 @@ class dlgutils:
         c_nocturna = self.str2int( self.d_local_conf.get('NOCTURNA','2330'))
         hash_str = f'[{enable},{c_diurna:04d},{c_nocturna:04d}]'
         xhash = self.u_hash(xhash, hash_str)
-        print(f'DEBUG HASH CONSIGNA: hash_str={hash_str}{xhash}')
+        #print(f'DEBUG HASH CONSIGNA: hash_str={hash_str}{xhash}')
         return xhash
 
     def get_response_consigna(self, d_conf_consigna, fw_ver):

@@ -179,6 +179,14 @@ class ApiDlg(Resource):
         self.parser.add_argument('HASH', type=str ,location='args', required=True)
         self.args = self.parser.parse_args()
         #
+        if 'BASE' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_ERROR: NO BASE in keys !!. Equipo MAL configurado en el servidor")
+            self.GET_response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            return self.GET_response, self.GET_response_status_code
+    
+        #print(f"DEBUG: self.d_conf={self.d_conf}")
         # Chequeo la configuracion
         if self.d_conf is None:
             self.GET_response = 'CLASS=CONF_BASE&CONFIG=ERROR' 
@@ -217,6 +225,9 @@ class ApiDlg(Resource):
         self.parser.add_argument('HASH', type=str ,location='args', required=True)
         self.args = self.parser.parse_args()
         #
+        if 'AINPUTS' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_WARN: NO AINPUTS in keys !!. Revise configuracion en el servidor")
+
         # Chequeo la configuracion
         if self.d_conf is None:
             self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=ERROR'
@@ -251,6 +262,9 @@ class ApiDlg(Resource):
         self.parser.add_argument('HASH', type=str ,location='args', required=True)
         self.args = self.parser.parse_args()
         #
+        if 'COUNTERS' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_WARN: NO COUNTERS in keys !!. Revise configuracion en el servidor")
+
         # Chequeo la configuracion
         if self.d_conf is None:
             self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=ERROR' 
@@ -284,6 +298,9 @@ class ApiDlg(Resource):
         self.parser.add_argument('HASH', type=str ,location='args', required=True)
         self.args = self.parser.parse_args()
         #
+        if 'MODBUS' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_WARN: NO MODBUS in keys !!. Revise configuracion en el servidor")
+
         # Chequeo la configuracion
         if self.d_conf is None:
             self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=ERROR' 
@@ -317,6 +334,9 @@ class ApiDlg(Resource):
         self.parser.add_argument('HASH', type=str ,location='args', required=True)
         self.args = self.parser.parse_args()
         #
+        if 'PILOTO' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_WARN: NO PILOTO in keys !!. Revise configuracion en el servidor")
+
         # Chequeo la configuracion
         if self.d_conf is None:
             self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=ERROR' 
@@ -345,7 +365,6 @@ class ApiDlg(Resource):
         self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
         return self.GET_response, self.GET_response_status_code
  
-
     def __process_conf_consigna__(self):
         '''
         '''
@@ -353,6 +372,9 @@ class ApiDlg(Resource):
         self.parser.add_argument('HASH', type=str ,location='args', required=True)
         self.args = self.parser.parse_args()
         #
+        if 'CONSIGNA' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_WARN: NO CONSIGNA in keys !!. Revise configuracion en el servidor")
+
         # Chequeo la configuracion
         if self.d_conf is None:
             self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=ERROR' 
@@ -481,7 +503,14 @@ class ApiDlg(Resource):
             self.__format_response__()
             self.app.logger.info(f"(591) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
             return self.GET_response, self.GET_response_status_code
-        
+        #
+        if 'template' in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_ERROR: TEMPLATE  key !!. Equipo MAL configurado en el servidor")
+            self.GET_response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            return self.GET_response, self.GET_response_status_code
+
         # Analizo los tipos de frames
         # No acepto frames con ID DEFAULT.
         if self.ID == 'DEFAULT':

@@ -350,7 +350,7 @@ if __name__ == '__main__':
         #
         print('Running...')
         if seconds == 0:
-            #backup_usuarios()
+            backup_usuarios()
             backup_configuraciones()
         #
         time.sleep(SLEEP_TIME)
