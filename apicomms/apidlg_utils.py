@@ -58,9 +58,10 @@ class dlgutils:
     def version2int (self, str_version):
         '''
         VER tiene un formato tipo A.B.C.
-        Lo convertimos a un numero A*100 + B*10 + C
+        Lo convertimos a un numero A*100 + B*10 + C  
         '''
         return self.str2int( re.sub(r"[A-Z,a-z,.]",'',str_version))
+ 
 
     def get_hash_config_base(self, d_conf, fw_ver):
         '''

@@ -346,7 +346,7 @@ if __name__ == '__main__':
     # Una vez por día actualizo la configuración de equipos y usuarios
     seconds = 0
     while True:
-        #####backup_data()
+        backup_data()
         #
         print('Running...')
         if seconds == 0:

@@ -62,11 +62,11 @@ MODBUS_CONF_TEMPLATE = {
     '1.1.0': {
         'LOCALADDR': '0x01',
         'ENABLE': 'FALSE',
-        'M0': { 'NAME': 'X', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
-        'M1': { 'NAME': 'X', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
-        'M2': { 'NAME': 'X', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
-        'M3': { 'NAME': 'X', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
-        'M4': { 'NAME': 'X', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
+        'M0': { 'NAME': 'X', 'ENABLE':'FALSE', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
+        'M1': { 'NAME': 'X', 'ENABLE':'FALSE', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
+        'M2': { 'NAME': 'X', 'ENABLE':'FALSE', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
+        'M3': { 'NAME': 'X', 'ENABLE':'FALSE', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
+        'M4': { 'NAME': 'X', 'ENABLE':'FALSE', 'SLA_ADDR': '2','ADDR': '0','NRO_RECS': '2','FCODE': '0','TYPE': 'FLOAT', 'CODEC': 'C1032','POW10': '0' },
         }    
 }
 

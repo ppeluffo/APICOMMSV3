@@ -33,7 +33,7 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = False
+TESTING = True
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'
     APIREDIS_PORT = '5100'
@@ -90,11 +90,23 @@ class Help(Resource):
         '''
         return {}, 200
 
+class Test(Resource):
+    '''
+    Clase para probar nuevos equipos ( SPQ)
+    '''
+    def get(self):
+        now=dt.datetime.now().strftime('%y%m%d%H%M%S')
+        response = f'<html>CLASS=DATA&CLOCK={now};</html>'
+        return response, 200
+
+
+
 api.add_resource( ApiPlc, '/apiplc', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( ApiDlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( ApiOceanus, '/apioceanus', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( Help,   '/apicomms/help')
 api.add_resource( Ping,   '/apicomms/ping')
+api.add_resource( Test,   '/apicomms/test')
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
