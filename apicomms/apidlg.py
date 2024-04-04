@@ -200,7 +200,7 @@ class ApiDlg(Resource):
         self.__update_uid2id__(self.ID, self.UID)
 
         # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_base(self.d_conf, self.VER )
+        bd_hash = self.dlgutils.get_hash_config_base(self.d_conf, self.VER, self.TYPE )
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f"(541) ApiDLG_INFO ID={self.args['ID']}, Base: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_base__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
@@ -212,7 +212,7 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
             
         # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_base(self.d_conf, self.VER )
+        self.GET_response = self.dlgutils.get_response_base(self.d_conf, self.VER, self.TYPE)
         self.GET_response_status_code = 200
         self.__format_response__()
         self.app.logger.info(f"(543) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
@@ -237,7 +237,7 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
 
         # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_ainputs(self.d_conf,self.VER )
+        bd_hash = self.dlgutils.get_hash_config_ainputs(self.d_conf,self.VER, self.TYPE )
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f"(551) ApiDLG_INFO ID={self.args['ID']}, Ainputs: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_ainputs__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
@@ -249,7 +249,7 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
             
         # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_ainputs(self.d_conf,self.VER )
+        self.GET_response = self.dlgutils.get_response_ainputs(self.d_conf,self.VER, self.TYPE )
         self.GET_response_status_code = 200
         self.__format_response__()
         self.app.logger.info(f"(553) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
@@ -274,7 +274,7 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
 
         # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_counters(self.d_conf,self.VER )
+        bd_hash = self.dlgutils.get_hash_config_counters(self.d_conf,self.VER, self.TYPE )
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f"(561) ApiDLG_INFO ID={self.args['ID']}, Counters: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
@@ -285,12 +285,49 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
             
         # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_counters(self.d_conf,self.VER )
+        self.GET_response = self.dlgutils.get_response_counters(self.d_conf,self.VER, self.TYPE )
         self.GET_response_status_code = 200
         self.__format_response__()
         self.app.logger.info(f"(563) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
         return self.GET_response, self.GET_response_status_code
     
+    def __process_conf_consigna__(self):
+        '''
+        '''
+        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_PILOTO&HASH=0x86
+        self.parser.add_argument('HASH', type=str ,location='args', required=True)
+        self.args = self.parser.parse_args()
+        #
+        if 'CONSIGNA' not in self.d_conf.keys():
+            self.app.logger.info(f"() ApiDLG_WARN: NO CONSIGNA in keys !!. Revise configuracion en el servidor")
+
+        # Chequeo la configuracion
+        if self.d_conf is None:
+            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=ERROR' 
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            self.app.logger.info(f"(600) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+
+        # Calculo el hash de la configuracion de la BD.
+        bd_hash = self.dlgutils.get_hash_config_consigna( self.d_conf,self.VER, self.TYPE )
+        if self.ID == self.debug_unit_id:
+            self.app.logger.info(f"(601) ApiDLG_INFO ID={self.args['ID']}, D_CONSIGNA={ self.d_conf['CONSIGNA']}")
+            self.app.logger.info(f"(602) ApiDLG_INFO ID={self.args['ID']}, Consigna: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
+        if bd_hash == int(self.args['HASH'],16):
+            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=OK'
+            self.GET_response_status_code = 200
+            self.__format_response__()
+            self.app.logger.info(f"(603) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+            return self.GET_response, self.GET_response_status_code
+            
+        # No coinciden: mando la nueva configuracion
+        self.GET_response = self.dlgutils.get_response_consigna( self.d_conf,self.VER, self.TYPE )
+        self.GET_response_status_code = 200
+        self.__format_response__()
+        self.app.logger.info(f"(604) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
+        return self.GET_response, self.GET_response_status_code
+
     def __process_conf_modbus__(self):
         '''
         '''
@@ -310,7 +347,7 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
 
         # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_modbus(self.d_conf,self.VER )
+        bd_hash = self.dlgutils.get_hash_config_modbus(self.d_conf,self.VER, self.TYPE )
         if self.ID == self.debug_unit_id:
             self.app.logger.info(f"(571) ApiDLG_INFO ID={self.args['ID']}, Modbus: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
@@ -321,7 +358,7 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
             
         # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_modbus(self.d_conf,self.VER)
+        self.GET_response = self.dlgutils.get_response_modbus(self.d_conf,self.VER, self.TYPE )
         self.GET_response_status_code = 200
         self.__format_response__()
         self.app.logger.info(f"(573) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
@@ -345,11 +382,10 @@ class ApiDlg(Resource):
             self.app.logger.info(f"(590) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
             return self.GET_response, self.GET_response_status_code
 
-        d_conf_piloto = self.d_conf.get('PILOTO',{})
         # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_piloto( d_conf_piloto,self.VER )
+        bd_hash = self.dlgutils.get_hash_config_piloto( self.d_conf, self.VER, self.TYPE )
         if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(591) ApiDLG_INFO ID={self.args['ID']}, D_PILOTO={d_conf_piloto}")
+            self.app.logger.info(f"(591) ApiDLG_INFO ID={self.args['ID']}, D_PILOTO={ self.d_conf['PILOTO']}")
             self.app.logger.info(f"(592) ApiDLG_INFO ID={self.args['ID']}, Piloto: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
         if bd_hash == int(self.args['HASH'],16):
             self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=OK'
@@ -359,56 +395,18 @@ class ApiDlg(Resource):
             return self.GET_response, self.GET_response_status_code
             
         # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_piloto(d_conf_piloto,self.VER )
+        self.GET_response = self.dlgutils.get_response_piloto( self.d_conf, self.VER, self.TYPE )
         self.GET_response_status_code = 200
         self.__format_response__()
         self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
         return self.GET_response, self.GET_response_status_code
  
-    def __process_conf_consigna__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_PILOTO&HASH=0x86
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'CONSIGNA' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_WARN: NO CONSIGNA in keys !!. Revise configuracion en el servidor")
-
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(600) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        d_conf_consigna = self.d_conf.get('CONSIGNA',{})
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_consigna( d_conf_consigna,self.VER )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(601) ApiDLG_INFO ID={self.args['ID']}, D_CONSIGNA={d_conf_consigna}")
-            self.app.logger.info(f"(602) ApiDLG_INFO ID={self.args['ID']}, Consigna: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(603) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_consigna(d_conf_consigna,self.VER )
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(604) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-
     def __process_data__(self):
         '''
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
         # request.args es un dict con todos los pares key:value del url.
-        d_payload = self.dlgutils.convert_dataline2dict(request.args, self.VER)
+        d_payload = self.dlgutils.convert_dataline2dict(request.args, self.VER, self.TYPE)
         
         if d_payload is None:
             return 'ERROR:UNKNOWN VERSION',200

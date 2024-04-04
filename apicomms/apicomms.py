@@ -18,6 +18,7 @@ import requests
 from flask import Flask
 from flask_restful import Resource, Api
 from apidlg import ApiDlg
+from apidlgR2 import ApidlgR2
 from apiplc import ApiPlc
 from apioceanus import ApiOceanus
 
@@ -33,7 +34,8 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = True
+TESTING = False
+
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'
     APIREDIS_PORT = '5100'
@@ -46,7 +48,6 @@ servers = {
    'APICONF_HOST' : APICONF_HOST,
    'APICONF_PORT' : APICONF_PORT
 }
-
 
 class Ping(Resource):
     '''
@@ -99,10 +100,9 @@ class Test(Resource):
         response = f'<html>CLASS=DATA&CLOCK={now};</html>'
         return response, 200
 
-
-
 api.add_resource( ApiPlc, '/apiplc', resource_class_kwargs={ 'app': app, 'servers':servers })
-api.add_resource( ApiDlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
+#api.add_resource( ApiDlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
+api.add_resource( ApidlgR2, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( ApiOceanus, '/apioceanus', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( Help,   '/apicomms/help')
 api.add_resource( Ping,   '/apicomms/ping')

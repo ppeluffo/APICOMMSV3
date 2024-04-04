@@ -23,6 +23,27 @@ services:
       APICONF_HOST: apiconf
       APICONF_PORT: 5200
 
+  apicomms_test:
+    build:
+      context: ./apicomms
+      dockerfile: Dockerfile
+    image: spymovil/commsv3_apicomms_test:latest
+    ports:
+      - 5001:5001
+    logging:
+      driver: "syslog"
+      options:
+        syslog-address: "udp://192.168.0.20:514"
+        tag: "APICOMMS" 
+    depends_on:
+      - apiredis
+      - apiconf
+    environment:
+      APIREDIS_HOST: apiredis
+      APIREDIS_PORT: 5100
+      APICONF_HOST: apiconf
+      APICONF_PORT: 5200
+
   apiconf:
     build:
       context: ./apiconf

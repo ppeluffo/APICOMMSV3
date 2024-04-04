@@ -62,8 +62,7 @@ class dlgutils:
         '''
         return self.str2int( re.sub(r"[A-Z,a-z,.]",'',str_version))
  
-
-    def get_hash_config_base(self, d_conf, fw_ver):
+    def get_hash_config_base(self, d_conf, fw_ver, fw_type):
         '''
         Calcula el hash de la configuracion base.
         RETURN: int
@@ -71,14 +70,52 @@ class dlgutils:
         self.d_local_conf = d_conf
         #print(f"DEBUG: self.d_local_conf={self.d_local_conf}")
         self.ifw_ver = self.version2int( fw_ver)
-        #print(f"DEBUG: self.ifw_ver={self.ifw_ver}")
 
+        print(f"DEBUG:get_hash_config_base fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+
+        if fw_type == 'SPQ' and self.ifw_ver < 10:
+            return self.__get_hash_config_base_SQPV001__()
+        
         if self.ifw_ver == 110:
             return self.__get_hash_config_base_V110__()
         else:
-            print("ERROR: Version no soportada")
+            print("ERROR_001::get_hash_config_base: Version no soportada")
             return -1
     
+    def __get_hash_config_base_SQPV001__(self):
+        '''
+        Calculo el hash para la version SPQV001
+        '''
+        #print('DEBUG: __get_hash_config_base_SQPV001__')
+
+        xhash = 0
+        timerpoll = self.str2int(self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        timerdial = self.str2int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        pwr_modo = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
+        pwr_hhmm_on = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','601'))
+        pwr_hhmm_off = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2201'))
+        #
+        hash_str = f'[TIMERPOLL:{timerpoll:03d}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        #
+        hash_str = f'[TIMERDIAL:{timerdial:03d}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        #
+        hash_str = f'[PWRMODO:{pwr_modo}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        #
+        hash_str = f'[PWRON:{pwr_hhmm_on:04}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        #
+        hash_str = f'[PWROFF:{pwr_hhmm_off:04}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG::get_hash_config_base: hash_str={hash_str}, xhash={xhash}')
+        return xhash
+
     def __get_hash_config_base_V110__(self):
         '''
         Calculo el hash para la versión 110
@@ -123,21 +160,50 @@ class dlgutils:
         #print(f'DEBUG::get_hash_config_base: xhash={xhash}')
         return xhash
 
-    def get_response_base(self, d_conf, fw_ver):
+    def get_response_base(self, d_conf, fw_ver, fw_type):
         '''
         Calcula la respuesta de configuracion base
         RETURN: string
         '''
         #
+        print(f"DEBUG:get_response_base fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+        #
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
-        #       
+        #   
+        if fw_type == 'SPQ' and self.ifw_ver < 10:
+            return self.__get_response_base_SPQV001__()
+        
         if self.ifw_ver == 110:
             return self.__get_response_base_V110__()
         
-        print("ERROR: Version no soportada")
+        print("ERROR_002::get_response_base: Version no soportada")
         return 'ERROR:UNKNOWN VERSION'
 
+    def __get_response_base_SPQV001__(self):
+        '''
+        '''
+        print('DEBUG: __get_response_base_SPQV001__')
+
+        timerpoll = self.str2int( self.d_local_conf.get('BASE',{}).get('TPOLL','0'))
+        #print(f'DEBUG::timerpoll={timerpoll}')
+        timerdial = self.str2int(self.d_local_conf.get('BASE',{}).get('TDIAL','0'))
+        #print(f'DEBUG::timerdial={timerdial}')
+        pwr_modo = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_MODO','0'))
+        pwr_hhmm_on = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM1','600'))
+        pwr_hhmm_off = self.str2int(self.d_local_conf.get('BASE',{}).get('PWRS_HHMM2','2200'))
+        if pwr_modo == 0:
+            s_pwrmodo = 'CONTINUO'
+        elif pwr_modo == 1:
+            s_pwrmodo = 'DISCRETO'
+        else:
+            s_pwrmodo = 'MIXTO'
+        #
+        response = 'CLASS=CONF_BASE&'
+        response += f'TPOLL={timerpoll}&TDIAL={timerdial}&PWRMODO={s_pwrmodo}&PWRON={pwr_hhmm_on:04}&PWROFF={pwr_hhmm_off:04}'
+        #print(f'DEBUG::response={response}')
+        return response
+    
     def __get_response_base_V110__(self):
         '''
         '''
@@ -164,7 +230,7 @@ class dlgutils:
         #print(f'DEBUG::response={response}')
         return response
     
-    def get_hash_config_ainputs(self, d_conf, fw_ver):
+    def get_hash_config_ainputs(self, d_conf, fw_ver, fw_type):
         '''
         Calcula el hash de la configuracion de canales analoggicos.
         RETURN: int
@@ -173,12 +239,23 @@ class dlgutils:
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
         #
+        print(f"DEBUG:get_hash_config_ainputs fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+
+        if fw_type == 'SPQ' and self.ifw_ver < 10:
+            return self.__get_hash_config_ainputs_SPQV001__()
+        
         if self.ifw_ver == 110:
             return self.__get_hash_config_ainputs_V110__()
         else:
-            print("ERROR: Version no soportada")
+            print("ERROR_003::get_hash_config_ainputs: Version no soportada")
             return -1
     
+    def __get_hash_config_ainputs_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_hash_config_ainputs_SPQV001__')
+        return  self.__get_hash_config_ainputs_V110__()
+     
     def __get_hash_config_ainputs_V110__(self):
         '''
         '''
@@ -196,7 +273,7 @@ class dlgutils:
             #print(f'DEBUG::get_hash_config_ainputs: hash_str={hash_str}, xhash={xhash}')
         return xhash
     
-    def get_response_ainputs(self, d_conf, fw_ver):
+    def get_response_ainputs(self, d_conf, fw_ver, fw_type):
         '''
         Calcula la respuesta de configuracion de canales analogicos
         '''
@@ -204,11 +281,16 @@ class dlgutils:
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
         #
+        print(f"DEBUG:get_response_ainputs fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+
+        if fw_type == 'SPQ' and self.ifw_ver < 10:
+            return self.__get_response_ainputs_SPQV001__()
+        #
         if self.ifw_ver == 110:
             return self.__get_response_ainputs_V110__()
-        print("ERROR: Version no soportada")
+        print("ERROR_004::get_response_ainputs: Version no soportada")
         return 'ERROR:UNKNOWN VERSION'
- 
+     
     def __get_response_ainputs_V110__(self):
         '''
         '''
@@ -226,7 +308,13 @@ class dlgutils:
         response = response[:-1]
         return response
         
-    def get_hash_config_counters(self, d_conf, fw_ver):
+    def __get_response_ainputs_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_response_ainputs_SPQV001__')
+        return self. __get_response_ainputs_V110__()
+    
+    def get_hash_config_counters(self, d_conf, fw_ver, fw_type):
         '''
         Calcula el hash de la configuracion de canales digitales ( contadores ).
         RETURN: int
@@ -235,10 +323,15 @@ class dlgutils:
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
         #
+        #print(f"DEBUG:get_hash_config_counters fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_hash_config_counters_SPQV001__()
+    
         if self.ifw_ver == 110:
             return self.__get_hash_config_counters_V110__()
         else:
-            print("ERROR: Version no soportada")
+            print("ERROR_005::get_hash_config_counters: Version no soportada")
             return -1
 
     def __get_hash_config_counters_V110__(self):
@@ -257,16 +350,39 @@ class dlgutils:
         #
         return xhash
     
-    def get_response_counters(self, d_conf, fw_ver):
+    def __get_hash_config_counters_SPQV001__(self):
+        '''
+        El SPQ tiene 1 solo canal de caudal: el C0 en la configuracion.
+        '''
+        #print('DEBUG: __get_hash_config_counters_SPQV001__')
+
+        xhash = 0
+        for channel in ['C0']:
+            enable = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
+            name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME','X')
+            modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
+            magpp=float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
+            hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo}]'
+            xhash = self.u_hash(xhash, hash_str)
+            #print(f'DEBUG HASH COUNTERS: hash_str={hash_str}')
+        #
+        return xhash
+    
+    def get_response_counters(self, d_conf, fw_ver,fw_type):
         '''
         Calcula la respuesta de configuracion de canales contadores
         '''
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
         #
+        #print(f"DEBUG:get_response_counters fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_response_counters_SPQV001__()
+        #
         if self.ifw_ver == 110:
             return self.__get_response_counters_V110__()
-        print("ERROR: Version no soportada")  
+        print("ERROR_006::get_response_counters: Version no soportada")  
         return 'ERROR:UNKNOWN VERSION'
     
     def __get_response_counters_V110__(self):
@@ -284,7 +400,96 @@ class dlgutils:
         response = response[:-1]
         return response
 
-    def get_hash_config_modbus(self, d_conf, fw_ver):
+    def __get_response_counters_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_response_counters_SPQV001__')
+
+        response = 'CLASS=CONF_COUNTERS&'
+        for channel in ['C0']:
+            enable = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
+            name = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('NAME', 'X')
+            magpp = float(self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP', 1.00))
+            str_modo = self.d_local_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
+            response += f'{channel}={enable},{name},{magpp},{str_modo}'
+        #
+        return response
+
+    #-------------------------------------------------------------
+    
+    def get_hash_config_consigna(self, d_conf, fw_ver, fw_type):
+        '''
+        Calcula el hash de la configuracion del consigna.
+        RETURN: int
+        '''
+        #
+        self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_hash_config_consigna_SPQV001__()
+    
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_consigna_V110__()
+        else:
+            print("ERROR_007::get_hash_config_consigna: Version no soportada")
+            return -1
+
+    def __get_hash_config_consigna_V110__(self):
+        '''
+        '''
+        xhash = 0
+        #print(f'DEBUG D_CONF_CONSIGNA={self.d_local_conf}')
+        enable=self.d_local_conf.get('CONSIGNA',{}).get('ENABLE','FALSE')
+        c_diurna = self.str2int( self.d_local_conf.get('CONSIGNA',{}).get('DIURNA','630'))
+        c_nocturna = self.str2int( self.d_local_conf.get('CONSIGNA',{}).get('NOCTURNA','2330'))
+        hash_str = f'[{enable},{c_diurna:04d},{c_nocturna:04d}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG HASH CONSIGNA: hash_str={hash_str}{xhash}')
+        return xhash
+
+    def __get_hash_config_consigna_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_hash_config_consigna_SPQV001__')
+        return  self.__get_hash_config_consigna_V110__()
+
+    def get_response_consigna(self, d_conf, fw_ver, fw_type):
+        '''
+        Calcula la respuesta de configuracion de canales modbus
+        '''
+        self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        #print(f"DEBUG:get_response_consigna fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_response_consigna_SPQV001__()
+        #
+        if self.ifw_ver == 110:
+            return self.__get_response_consigna_V110__()
+        
+        print("ERROR_008::get_response_consigna: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+ 
+    def __get_response_consigna_V110__(self):
+        '''
+        '''
+        enable=self.d_local_conf.get('CONSIGNA',{}).get('ENABLE','FALSE')
+        c_diurna = self.d_local_conf.get('CONSIGNA',{}).get('DIURNA','630')
+        c_nocturna = self.d_local_conf.get('CONSIGNA',{}).get('NOCTURNA','2330')
+        response = f'CLASS=CONF_CONSIGNA&ENABLE={enable}&DIURNA={c_diurna}&NOCTURNA={c_nocturna}'
+        return response
+
+    def __get_response_consigna_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_response_consigna_SPQV001__')
+        return self. __get_response_consigna_V110__()
+    
+    #-------------------------------------------------------------
+
+    def get_hash_config_modbus(self, d_conf, fw_ver, fw_type):
         '''
         Calcula el hash de la configuracion de canales modbus.
         RETURN: int
@@ -293,10 +498,13 @@ class dlgutils:
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
         #
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_hash_config_modbus_SPQV001__()
+    
         if self.ifw_ver == 110:
             return self.__get_hash_config_modbus_V110__()
         else:
-            print("ERROR: Version no soportada")
+            print("ERROR_007::get_hash_config_modbus: Version no soportada")
             return -1
 
     def __get_hash_config_modbus_V110__(self):
@@ -326,18 +534,34 @@ class dlgutils:
         #
         return xhash
 
-    def get_response_modbus(self, d_conf, fw_ver):
+    def __get_hash_config_modbus_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_hash_config_modbus_SPQV001__')
+        return  self.__get_hash_config_modbus_V110__()
+
+    def get_response_modbus(self, d_conf, fw_ver, fw_type):
         '''
         Calcula la respuesta de configuracion de canales modbus
         '''
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
-        #     
+        #
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_response_modbus_SPQV001__()
+    
         if self.ifw_ver == 110:
             return self.__get_response_modbus_V110__()
-        print("ERROR: Version no soportada")  
+        
+        print("ERROR_009::get_response_modbus: Version no soportada")  
         return 'ERROR:UNKNOWN VERSION'
  
+    def __get_response_modbus_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_response_modbus_SPQV001__')
+        return self. __get_response_modbus_V110__()
+    
     def __get_response_modbus_V110__(self):
         '''
         '''
@@ -361,16 +585,110 @@ class dlgutils:
         response = response[:-1]
         return response
 
-    def convert_dataline2dict (self, d_url_args, fw_ver):
+    #-------------------------------------------------------------
+    def get_hash_config_piloto(self, d_conf, fw_ver, fw_type):
+        '''
+        Calcula el hash de la configuracion del piloto.
+        RETURN: int
+        '''
+        #
+        self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_hash_config_piloto_SPQV001__()
+    
+        if self.ifw_ver == 110:
+            return self.__get_hash_config_piloto_V110__()
+        else:
+            print("ERROR_007::get_hash_config_modbus: Version no soportada")
+            return -1
+
+    def __get_hash_config_piloto_V110__(self):
+        '''
+        '''
+        xhash = 0
+        #print(f'DEBUG D_CONF_PILOTO={self.d_local_conf}')
+        enable=self.d_local_conf.get('PILOTO',{}).get('ENABLE','FALSE')
+        ppr=self.str2int(self.d_local_conf.get('PILOTO',{}).get('PPR','1000'))
+        pwidth=self.str2int(self.d_local_conf.get('PILOTO',{}).get('PWIDTH','10'))
+        hash_str = f'[{enable},{ppr:04d},{pwidth:02d}]'
+        xhash = self.u_hash(xhash, hash_str)
+        #print(f'DEBUG HASH PILOTO: hash_str={hash_str}{xhash}')
+        #
+        for channel in range(12):
+            slot_name = f'SLOT{channel}'
+            presion = float( self.d_local_conf.get('PILOTO',{}).get(slot_name,{}).get('PRES','0.0'))
+            timeslot = self.str2int( self.d_local_conf.get('PILOTO',{}).get(slot_name,{}).get('TIME','0000'))
+            hash_str = f'[S{channel:02d}:{timeslot:04d},{presion:0.2f}]'
+            xhash = self.u_hash(xhash, hash_str)
+            #print(f'DEBUG HASH PILOTO: hash_str={hash_str}{xhash}')
+        # 
+        return xhash
+
+    def __get_hash_config_piloto_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_hash_config_piloto_SPQV001__')
+        return  self.__get_hash_config_piloto_V110__()
+    
+    def get_response_piloto(self, d_conf, fw_ver, fw_type):
+        '''
+        Calcula la respuesta de configuracion de canales modbus
+        '''
+        self.d_local_conf = d_conf
+        self.ifw_ver = self.version2int( fw_ver)
+        #
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__get_response_piloto_SPQV001__()
+    
+        if self.ifw_ver == 110:
+            return self.__get_response_piloto_V110__()
+        
+        print("ERROR_009::get_response_piloto: Version no soportada")  
+        return 'ERROR:UNKNOWN VERSION'
+ 
+    def __get_response_piloto_V110__(self):
+        '''
+        '''
+        enable=self.d_local_conf.get('PILOTO',{}).get('ENABLE','FALSE')
+        ppr=self.str2int(self.d_local_conf.get('PILOTO',{}).get('PPR','1000'))
+        pwidth=self.str2int(self.d_local_conf.get('PILOTO',{}).get('PWIDTH','10'))
+        response = f'CLASS=CONF_PILOTO&ENABLE={enable}&PULSEXREV={ppr}&PWIDTH={pwidth}&'
+        #
+        for channel in range(12):
+            slot_name = f'SLOT{channel}'
+            presion = float( self.d_local_conf.get('PILOTO',{}).get(slot_name,{}).get('PRES','0.0'))
+            timeslot = self.str2int( self.d_local_conf.get('PILOTO',{}).get(slot_name,{}).get('TIME','0000'))
+            response += f'S{channel}={timeslot:04d},{presion:0.2f}&'
+        #
+        response = response[:-1]
+        return response
+
+    def __get_response_piloto_SPQV001__(self):
+        '''
+        '''
+        #print('DEBUG: __get_response_piloto_SPQV001__')
+        return self. __get_response_piloto_V110__()
+    
+    #-----------------------------------------------------------------
+    def convert_dataline2dict (self, d_url_args, fw_ver, fw_type):
         '''
         '''
         self.ifw_ver = self.version2int( fw_ver)
         #
+        if fw_type == 'SPQ' and self.ifw_ver == 1:
+            return self.__process_data_SPQV001__(d_url_args)
+        #
         if self.ifw_ver == 110:
             return self.__process_data_V110__(d_url_args)
-        #
-        print("(459) ApiCOMMS_ERR010: Version no soportada")  
+
+        print("ERROR_009::convert_dataline2dict: Version no soportada")  
+        #return 'ERROR:UNKNOWN VERSION'
         return None
+
+    def __process_data_SPQV001__(self, d_url_args):
+        return self.__process_data_V110__(d_url_args)
         
     def __process_data_V110__(self, d_url_args):
 
@@ -382,119 +700,3 @@ class dlgutils:
         #
         return d_payload
 
-    def get_hash_config_piloto(self, d_conf_piloto, fw_ver):
-        '''
-        Calcula el hash de la configuracion del piloto.
-        RETURN: int
-        '''
-        #
-
-        self.d_local_conf = d_conf_piloto
-        self.ifw_ver = self.version2int( fw_ver)
-        #
-        if self.ifw_ver == 110:
-            return self.__get_hash_config_piloto_V110__()
-        else:
-            print("ERROR: Version no soportada")
-            return -1
-
-    def __get_hash_config_piloto_V110__(self):
-        '''
-        '''
-        xhash = 0
-        #print(f'DEBUG D_CONF_PILOTO={self.d_local_conf}')
-        enable=self.d_local_conf.get('ENABLE','FALSE')
-        ppr=self.str2int(self.d_local_conf.get('PPR','1000'))
-        pwidth=self.str2int(self.d_local_conf.get('PWIDTH','10'))
-        hash_str = f'[{enable},{ppr:04d},{pwidth:02d}]'
-        xhash = self.u_hash(xhash, hash_str)
-        print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
-        #
-        for channel in range(12):
-            slot_name = f'SLOT{channel}'
-            presion = float( self.d_local_conf.get(slot_name,{}).get('PRES','0.0'))
-            timeslot = self.str2int( self.d_local_conf.get(slot_name,{}).get('TIME','0000'))
-            hash_str = f'[S{channel:02d}:{timeslot:04d},{presion:0.2f}]'
-            xhash = self.u_hash(xhash, hash_str)
-            #print(f'DEBUG HASH MODBUS: hash_str={hash_str}{xhash}')
-        # 
-        return xhash
-
-    def get_response_piloto(self, d_conf_piloto, fw_ver):
-        '''
-        Calcula la respuesta de configuracion de canales modbus
-        '''
-        self.d_local_conf = d_conf_piloto
-        self.ifw_ver = self.version2int( fw_ver)
-        #
-        if self.ifw_ver == 110:
-            return self.__get_response_piloto_V110__()
-        print("ERROR: Version no soportada")  
-        return 'ERROR:UNKNOWN VERSION'
- 
-    def __get_response_piloto_V110__(self):
-        '''
-        '''
-        enable=self.d_local_conf.get('ENABLE','FALSE')
-        ppr=self.str2int(self.d_local_conf.get('PPR','1000'))
-        pwidth=self.str2int(self.d_local_conf.get('PWIDTH','10'))
-        response = f'CLASS=CONF_PILOTO&ENABLE={enable}&PULSEXREV={ppr}&PWIDTH={pwidth}&'
-        #
-        for channel in range(12):
-            slot_name = f'SLOT{channel}'
-            presion = float( self.d_local_conf.get(slot_name,{}).get('PRES','0.0'))
-            timeslot = self.str2int( self.d_local_conf.get(slot_name,{}).get('TIME','0000'))
-            response += f'S{channel}={timeslot:04d},{presion:0.2f}&'
-        #
-        response = response[:-1]
-        return response
-
-    def get_hash_config_consigna(self, d_conf_consigna, fw_ver):
-        '''
-        Calcula el hash de la configuracion del consigna.
-        RETURN: int
-        '''
-        #
-
-        self.d_local_conf = d_conf_consigna
-        self.ifw_ver = self.version2int( fw_ver)
-        #
-        if self.ifw_ver == 110:
-            return self.__get_hash_config_consigna_V110__()
-        else:
-            print("ERROR: Version no soportada")
-            return -1
-
-    def __get_hash_config_consigna_V110__(self):
-        '''
-        '''
-        xhash = 0
-        #print(f'DEBUG D_CONF_CONSIGNA={self.d_local_conf}')
-        enable=self.d_local_conf.get('ENABLE','FALSE')
-        c_diurna = self.str2int( self.d_local_conf.get('DIURNA','630'))
-        c_nocturna = self.str2int( self.d_local_conf.get('NOCTURNA','2330'))
-        hash_str = f'[{enable},{c_diurna:04d},{c_nocturna:04d}]'
-        xhash = self.u_hash(xhash, hash_str)
-        #print(f'DEBUG HASH CONSIGNA: hash_str={hash_str}{xhash}')
-        return xhash
-
-    def get_response_consigna(self, d_conf_consigna, fw_ver):
-        '''
-        Calcula la respuesta de configuracion de canales modbus
-        '''
-        self.d_local_conf = d_conf_consigna
-        self.ifw_ver = self.version2int( fw_ver)
-        #
-        if self.ifw_ver == 110:
-            return self.__get_response_consigna_V110__()
-        print("ERROR: Version no soportada")  
-        return 'ERROR:UNKNOWN VERSION'
- 
-    def __get_response_consigna_V110__(self):
-        '''
-        '''
-        enable=self.d_local_conf.get('ENABLE','FALSE')
-        c_diurna = self.d_local_conf.get('DIURNA','630')
-        c_nocturna = self.d_local_conf.get('NOCTURNA','2330')
-        response = f'CLASS=CONF_CONSIGNA&ENABLE={enable}&DIURNA={c_diurna}&NOCTURNA={c_nocturna}'
-        return response
