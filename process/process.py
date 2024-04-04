@@ -234,6 +234,7 @@ def process_frames( protocolo, boundle_list ):
             except Exception as err:
                 print(f'ERROR en conversion de fechaData: ddate={ddate},dtime={dtime},ddata={d_data}')
                 print(f'ERROR: {err}')
+                continue
         
         else:
             sfechadata = sfechasys

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.historica
     fechasys timestamp(0) without time zone NOT NULL,
     equipo character varying(50) COLLATE pg_catalog."default" NOT NULL,
     tag character varying(50) COLLATE pg_catalog."default" NOT NULL,
-    valor numeric(20,6) NOT NULL,
+    valor double precision NOT NULL,
     CONSTRAINT historica_fechadata_equipo_tag_1cef2062_uniq UNIQUE (fechadata, equipo, tag)
 )
 
