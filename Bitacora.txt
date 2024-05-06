@@ -9,3 +9,9 @@ no de errores.
 Para esto requiere de numpy.
 * Rehago la imagen base para que el python tenga ahora numpy. ( lo agrego en Requirements.txt)
 -------------------------------------------------------------------------------------------------
+2024-05-06:
+* Ulises
+* En se agrega la funcion process:is_number, esta permite verificar que un string se puede convertir a un numero valido.
+* En process: process_frames se utiliza para validar los valores a ingresar.
+* En bkprocess:insert_usuarios se trunca la tabla existente primero para luego insertar los usuarios nuevamente. 
+-------------------------------------------------------------------------------------------------

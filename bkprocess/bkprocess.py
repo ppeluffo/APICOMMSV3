@@ -103,6 +103,12 @@ class BD_SQL_BASE:
         '''
         Inserta / actuliza los usuarios de la l_usuarios de a uno !!!
         '''
+        sql = "TRUNCATE TABLE usuarios;"
+
+        if not self.exec_sql(sql):
+            print(f"(30x) PROCESS_ERR008: UPSET TRUNCATE TABLE usuarios FAIL.")
+            print(f"(30x) PROCESS_ERR008: SQL={sql}.")
+                    
         for usuario in l_usuarios:
             user_id = usuario['user_id']
             fecha_ultimo_acceso = usuario['fecha_ultimo_acceso']
