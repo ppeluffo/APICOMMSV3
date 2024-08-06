@@ -203,6 +203,13 @@ class BD_SQL_BASE:
 def clt_C_handler(signum, frame):
     sys.exit(0)
 
+def is_number(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+
 def process_frames( protocolo, boundle_list ):
     '''
     Esta funcion recibe una lista con diccionarios de datos a insertar y
@@ -247,7 +254,8 @@ def process_frames( protocolo, boundle_list ):
             #print( f"PROCESS: process_frames, MSG:{msg}")
             #
             #bdsql.insert_raw( unit_id, key, value, datetime)
-            l_tuples.append( (sfechadata, sfechasys, unit_id, key, value) )
+            if is_number(value):
+                l_tuples.append( (sfechadata, sfechasys, unit_id, key, value) )
         #
     #
     bdsql.insert_bulk(l_tuples)

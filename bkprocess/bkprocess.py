@@ -24,7 +24,7 @@ SLEEP_TIME = int(os.environ.get('SLEEP_TIME',15))
 
 APIDATOS_HOST = os.environ.get('APIDATOS_HOST','192.168.0.8')
 APIDATOS_PORT = os.environ.get('APIDATOS_PORT','5300')
-APIDATOS_USERKEY = "RMNC3O96SJ1DZH700DZ8"
+APIDATOS_USERKEY = os.environ.get('APIDATOS_USERKEY',"RMNC3O96SJ1DZH700DZ8")
 
 PGSQL_HOST = os.environ.get('PGSQL_HOST','192.168.0.20')
 PGSQL_PORT = os.environ.get('PGSQL_PORT', '5432')
@@ -103,6 +103,12 @@ class BD_SQL_BASE:
         '''
         Inserta / actuliza los usuarios de la l_usuarios de a uno !!!
         '''
+        sql = "TRUNCATE TABLE usuarios;"
+
+        if not self.exec_sql(sql):
+            print(f"(30x) PROCESS_ERR008: UPSET TRUNCATE TABLE usuarios FAIL.")
+            print(f"(30x) PROCESS_ERR008: SQL={sql}.")
+                    
         for usuario in l_usuarios:
             user_id = usuario['user_id']
             fecha_ultimo_acceso = usuario['fecha_ultimo_acceso']
@@ -148,6 +154,9 @@ class BD_SQL_BASE:
             sql_historica = f"INSERT INTO historica ( fechadata,fechasys,equipo,tag,valor) VALUES " 
             for element in chunk:
                 tp = tuple(element)
+                # Si el valor no es un string, lo convierto
+                if not isinstance(tp[4], str):
+                    tp = tuple(tp[:4]) + (str(tp[4]),)                
                 sql_historica += f'{tp},'
             # Remuevo el ultimo ,
             sql_historica = sql_historica[:-1]
