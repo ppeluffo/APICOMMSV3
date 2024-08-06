@@ -17,10 +17,13 @@ R001 @ 2023-06-15: (commsv3_apicomms:1.1)
 from flask_restful import Resource, request, reqparse
 from dlg_spx_avrda_r110 import Dlg_spx_avrda_R110
 from dlg_spx_avrda_r120 import Dlg_spx_avrda_R120
+
 from dlg_spx_xmega_r110 import Dlg_spx_xmega_R110 
 from dlg_spx_xmega_r120 import Dlg_spx_xmega_R120
+
 from dlg_spq_avrda_r110 import Dlg_spq_avrda_R110
 from dlg_spq_avrda_r120 import Dlg_spq_avrda_R120
+from dlg_spq_avrda_r130 import Dlg_spq_avrda_R130
 
 from apidlgR2_utils import version2int, format_response
 
@@ -43,7 +46,7 @@ class ApidlgR2(Resource):
         Procesa los GET de los dataloggers: configuracion y datos.
         '''
         self.qs = request.query_string
-        self.app.logger.info("(100) Rcvd Frame: QS=%(a)s", {'a': self.qs })
+        self.app.logger.info("(100) Rcvd Frame: aQS=%(a)s", {'a': self.qs })
 
         parser = reqparse.RequestParser()
         parser.add_argument('TYPE', type=str ,location='args', required=True)
@@ -94,9 +97,11 @@ class ApidlgR2(Resource):
                 dlg = Dlg_spq_avrda_R110(d_args)
             elif dlg_ifw_ver <= 120:
                 dlg = Dlg_spq_avrda_R120(d_args)
+            elif dlg_ifw_ver <= 130:
+                dlg = Dlg_spq_avrda_R130(d_args)
             else:
                 # Por defecto usamos la version mas vieja
-                dlg = Dlg_spx_xmega_R110(d_args)
+                dlg = Dlg_spq_avrda_R110(d_args)
         else:
 
             dlg = Dlg_spx_avrda_R120(d_args)

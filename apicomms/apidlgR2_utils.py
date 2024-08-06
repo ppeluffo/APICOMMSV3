@@ -82,17 +82,17 @@ def version2int (str_version):
     components = str_version.split('.')
     try:
         mayor = int(components[0]) * 100
-    except IndexError:
+    except:
         mayor = 0
 
     try:
         minor = int(components[1]) * 10
-    except IndexError:
+    except:
         minor = 0
 
     try:
         patch = int(re.sub(r"[A-Z,a-z,.]",'', components[2]))
-    except IndexError:
+    except:
         path = 0
 
     return mayor + minor

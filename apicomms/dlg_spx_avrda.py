@@ -92,10 +92,10 @@ class Dlg_spx_avrda(Dlg_base):
         for channel in ['A0','A1','A2']:
             enable = d_conf.get('AINPUTS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = d_conf.get('AINPUTS',{}).get(channel,{}).get('NAME','X')
-            imin = str2int( d_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN','0'))
-            imax = str2int( d_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX','0'))
+            imin = str2int( d_conf.get('AINPUTS',{}).get(channel,{}).get('IMIN','4'))
+            imax = str2int( d_conf.get('AINPUTS',{}).get(channel,{}).get('IMAX','20'))
             mmin = float( d_conf.get('AINPUTS',{}).get(channel,{}).get('MMIN','0'))
-            mmax = float( d_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX','0'))
+            mmax = float( d_conf.get('AINPUTS',{}).get(channel,{}).get('MMAX','10'))
             offset = float( d_conf.get('AINPUTS',{}).get(channel,{}).get('OFFSET','0'))
             hash_str = f'[{channel}:{enable},{name},{imin},{imax},{mmin:.02f},{mmax:.02f},{offset:.02f}]'
             xhash = u_hash(xhash, hash_str)
@@ -129,7 +129,7 @@ class Dlg_spx_avrda(Dlg_base):
             enable =d_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = d_conf.get('COUNTERS',{}).get(channel,{}).get('NAME','X')
             modo = d_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
-            magpp = float(d_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
+            magpp = float(d_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','1'))
             rbsize = str2int(d_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
             hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo},{rbsize}]'
             xhash = u_hash(xhash, hash_str)

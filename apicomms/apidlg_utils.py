@@ -323,7 +323,7 @@ class dlgutils:
         self.d_local_conf = d_conf
         self.ifw_ver = self.version2int( fw_ver)
         #
-        #print(f"DEBUG:get_hash_config_counters fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
+        print(f"DEBUG:get_hash_config_counters fw_ver={fw_ver}, ifw_ver={self.ifw_ver}, fw_type={fw_type}")
 
         if fw_type == 'SPQ' and self.ifw_ver == 1:
             return self.__get_hash_config_counters_SPQV001__()

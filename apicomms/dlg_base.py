@@ -114,11 +114,16 @@ class Dlg_base:
         ERRORES: 5XX
         '''
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11
+        # ID=SPQTEST&TYPE=SPQ_AVRDA&VER=1.2.3&CLASS=CONF_BASE&UID=42138365900098090136013700000000&IMEI=868191051391785&ICCID=8959801023149326185F&CSQ=51&HASH=0x42
+
         app = d_args.get('app',None)
 
         parser = reqparse.RequestParser()
         parser.add_argument('ID', type=str ,location='args', required=True)
         parser.add_argument('UID', type=str ,location='args', required=True)
+        parser.add_argument('IMEI', type=str ,location='args', required=False)
+        parser.add_argument('ICCID', type=str ,location='args', required=False)
+        parser.add_argument('CSQ', type=str ,location='args', required=False)
         parser.add_argument('HASH', type=str ,location='args', required=True)
         args = parser.parse_args()
         dlgid = args.get('ID',None)
@@ -132,28 +137,33 @@ class Dlg_base:
         
         # Leo la configuracion del datalogger
         d_conf = read_configuration(d_args, dlgid)
-        if 'BASE' not in d_conf.keys():
-            app.logger.info("(502) process_frame_base ERROR: NO BASE in keys !!. Equipo MAL configurado en el servidor")
-            response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            status_code = 200
-            return response, status_code
-    
         # Chequeo la configuracion
         if d_conf is None:
             response = 'CLASS=CONF_BASE&CONFIG=ERROR' 
             status_code = 200
             app.logger.info(f"(503) process_frame_base ERROR: ID={dlgid},RSP=[{response}]")
             return response, status_code
-
+        
+        if 'BASE' not in d_conf.keys():
+            app.logger.info("(502) process_frame_base ERROR: NO BASE in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+    
         # Actualizo RECOVER UID2ID
         uid = args.get('UID',None)
         update_uid2id(d_args, dlgid, uid)
+
+        app.logger.info(f"(507) process_frame_base: {dlgid} UID=,RSP=[{args.get('UID',None)}]")
+        app.logger.info(f"(508) process_frame_base: {dlgid} IMEI={args.get('IMEI',None)}]")
+        app.logger.info(f"(509) process_frame_base: {dlgid} ICCID={args.get('ICCID',None)}]")
+        app.logger.info(f"(510) process_frame_base: {dlgid} CSQ={args.get('CSQ',None)}]")
 
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.get_base_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(504) process_frame_base: ID={dlgid}, Base: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
         #print(f"DEBUG::__get_conf_base__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
         if bd_hash == int(args['HASH'],16):
             response = 'CLASS=CONF_BASE&CONFIG=OK'
@@ -189,12 +199,6 @@ class Dlg_base:
         
         # Leo la configuracion del datalogger
         d_conf = read_configuration(d_args, dlgid)
-        if 'AINPUTS' not in d_conf.keys():
-            app.logger.info("(602) process_frame_ainputs ERROR: NO AINPUTS in keys !!. Equipo MAL configurado en el servidor")
-            response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            status_code = 200
-            return response, status_code
-
         # Chequeo la configuracion
         if d_conf is None:
             response = 'CLASS=CONF_AINPUTS&CONFIG=ERROR' 
@@ -202,11 +206,17 @@ class Dlg_base:
             app.logger.info(f"(603) process_frame_ainputs ERROR: ID={dlgid},RSP=[{response}]")
             return response, status_code
         
+        if 'AINPUTS' not in d_conf.keys():
+            app.logger.info("(602) process_frame_ainputs ERROR: NO AINPUTS in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+        
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.get_ainputs_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(604) process_frame_ainputs INFO: ID={dlgid}, Base: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
+            app.logger.info(f"(604) process_frame_ainputs INFO: ID={dlgid}: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
 
         if bd_hash == int(args['HASH'],16):
             response = 'CLASS=CONF_AINPUTS&CONFIG=OK'
@@ -242,12 +252,6 @@ class Dlg_base:
         
         # Leo la configuracion del datalogger
         d_conf = read_configuration(d_args, dlgid)
-        if 'COUNTERS' not in d_conf.keys():
-            app.logger.info("(702) process_frame_counters ERROR: NO COUNTERS in keys !!. Equipo MAL configurado en el servidor")
-            response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            status_code = 200
-            return response, status_code
-
         # Chequeo la configuracion
         if d_conf is None:
             response = 'CLASS=CONF_COUNTERS&CONFIG=ERROR' 
@@ -255,11 +259,17 @@ class Dlg_base:
             app.logger.info(f"(703) process_frame_counters INFO: ID={dlgid},RSP=[{response}]")
             return response, status_code
         
+        if 'COUNTERS' not in d_conf.keys():
+            app.logger.info("(702) process_frame_counters ERROR: NO COUNTERS in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+        
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.get_counters_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(704) process_frame_counters INFO: ID={dlgid}, Base: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
+            app.logger.info(f"(704) process_frame_counters INFO: ID={dlgid}: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
 
         if bd_hash == int(args['HASH'],16):
             response = 'CLASS=CONF_COUNTERS&CONFIG=OK'
@@ -295,12 +305,6 @@ class Dlg_base:
         
         # Leo la configuracion del datalogger
         d_conf = read_configuration(d_args, dlgid)
-        if 'MODBUS' not in d_conf.keys():
-            app.logger.info("(802) process_frame_modbus ERROR: NO MODBUS in keys !!. Equipo MAL configurado en el servidor")
-            response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            status_code = 200
-            return response, status_code
-
         # Chequeo la configuracion
         if d_conf is None:
             response = 'CLASS=CONF_MODBUS&CONFIG=ERROR' 
@@ -308,11 +312,17 @@ class Dlg_base:
             app.logger.info(f"(803) process_frame_modbus INFO: ID={dlgid},RSP=[{response}]")
             return response, status_code
         
+        if 'MODBUS' not in d_conf.keys():
+            app.logger.info("(802) process_frame_modbus ERROR: NO MODBUS in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+        
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.get_modbus_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(804) process_frame_modbus INFO: ID={dlgid}, Base: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
+            app.logger.info(f"(804) process_frame_modbus INFO: ID={dlgid}: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
 
         if bd_hash == int(args['HASH'],16):
             response = 'CLASS=CONF_MODBUS&CONFIG=OK'
@@ -348,12 +358,6 @@ class Dlg_base:
         
         # Leo la configuracion del datalogger
         d_conf = read_configuration(d_args, dlgid)
-        if 'PILOTO' not in d_conf.keys():
-            app.logger.info("(902) process_frame_piloto ERROR: NO PILOTO in keys !!. Equipo MAL configurado en el servidor")
-            response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            status_code = 200
-            return response, status_code
-
         # Chequeo la configuracion
         if d_conf is None:
             response = 'CLASS=CONF_PILOTO&CONFIG=ERROR' 
@@ -361,11 +365,17 @@ class Dlg_base:
             app.logger.info(f"(903) process_frame_piloto INFO: ID={dlgid},RSP=[{response}]")
             return response, status_code
         
+        if 'PILOTO' not in d_conf.keys():
+            app.logger.info("(902) process_frame_piloto ERROR: NO PILOTO in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+        
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.get_piloto_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(904) process_frame_piloto INFO: ID={dlgid}, Base: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
+            app.logger.info(f"(904) process_frame_piloto INFO: ID={dlgid}: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
 
         if bd_hash == int(args['HASH'],16):
             response = 'CLASS=CONF_PILOTO&CONFIG=OK'
@@ -401,12 +411,6 @@ class Dlg_base:
         
         # Leo la configuracion del datalogger
         d_conf = read_configuration(d_args, dlgid)
-        if 'CONSIGNA' not in d_conf.keys():
-            app.logger.info("(1002) process_frame_consigna ERROR: NO CONSIGNA in keys !!. Equipo MAL configurado en el servidor")
-            response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            status_code = 200
-            return response, status_code
-
         # Chequeo la configuracion
         if d_conf is None:
             response = 'CLASS=CONF_CONSIGNA&CONFIG=ERROR' 
@@ -414,11 +418,17 @@ class Dlg_base:
             app.logger.info(f"(1003) process_frame_consigna INFO: ID={dlgid},RSP=[{response}]")
             return response, status_code
         
+        if 'CONSIGNA' not in d_conf.keys():
+            app.logger.info("(1002) process_frame_consigna ERROR: NO CONSIGNA in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+        
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
         bd_hash = self.get_consigna_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(1004) process_frame_consigna INFO: ID={dlgid}, Base: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
+            app.logger.info(f"(1004) process_frame_consigna INFO: ID={dlgid}: BD_hash={bd_hash}, UI_hash={int(args['HASH'],16)}")
 
         if bd_hash == int(args['HASH'],16):
             response = 'CLASS=CONF_CONSIGNA&CONFIG=OK'

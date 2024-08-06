@@ -17,7 +17,7 @@ import logging
 import requests
 from flask import Flask
 from flask_restful import Resource, Api
-from apidlg import ApiDlg
+#from apidlg import ApiDlg
 from apidlgR2 import ApidlgR2
 from apiplc import ApiPlc
 from apioceanus import ApiOceanus
@@ -34,7 +34,7 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = False
+TESTING = True
 
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'

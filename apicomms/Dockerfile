@@ -6,5 +6,5 @@ COPY entrypoint.sh .
 RUN chmod 777 /apicomms/*
 ENTRYPOINT ["sh", "entrypoint.sh"]
 
-EXPOSE 5001
+EXPOSE 5000
 

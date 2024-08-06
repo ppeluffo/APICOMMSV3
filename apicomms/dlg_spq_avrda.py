@@ -123,32 +123,37 @@ class Dlg_spq_avrda(Dlg_base):
     def get_counters_hash_from_config(self, d_conf=None):
         '''
         Calculo el hash para todas las versiones
+        Los SPQ tienen un solo contador y no usan ringbuffer
         '''
         xhash = 0
-        for channel in ['C0','C1']:
+        for channel in ['C0']:
             enable =d_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = d_conf.get('COUNTERS',{}).get(channel,{}).get('NAME','X')
             modo = d_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
             magpp = float(d_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP','0'))
-            rbsize = str2int(d_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
-            hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo},{rbsize}]'
+            #rbsize = str2int(d_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+            #hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo},{rbsize}]'
+            hash_str = f'[{channel}:{enable},{name},{magpp:.03f},{modo}]'
             xhash = u_hash(xhash, hash_str)
             #print(f'DEBUG HASH COUNTERS: hash_str={hash_str}')
         #
+        #print(f'DEBUG HASH COUNTERS: hash={xhash}')
         return xhash
 
     def get_response_counters(self, d_conf=None):
         '''
         Armo la respuesta para todas las versiones
+        Los SPQ tienen un solo contador y no usan ringbuffer
         '''
         response = 'CLASS=CONF_COUNTERS&'
-        for channel in ['C0','C1']:
+        for channel in ['C0']:
             enable = d_conf.get('COUNTERS',{}).get(channel,{}).get('ENABLE','FALSE')
             name = d_conf.get('COUNTERS',{}).get(channel,{}).get('NAME', 'X')
             magpp = float(d_conf.get('COUNTERS',{}).get(channel,{}).get('MAGPP', 1.00))
             str_modo = d_conf.get('COUNTERS',{}).get(channel,{}).get('MODO','CAUDAL')
-            rbsize = str2int(d_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
-            response += f'{channel}={enable},{name},{magpp},{str_modo},{rbsize}&'
+            #rbsize = str2int(d_conf.get('COUNTERS',{}).get(channel,{}).get('RBSIZE','1'))
+            #response += f'{channel}={enable},{name},{magpp},{str_modo},{rbsize}&'
+            response += f'{channel}={enable},{name},{magpp},{str_modo}&'
         #
         response = response[:-1]
         return response
