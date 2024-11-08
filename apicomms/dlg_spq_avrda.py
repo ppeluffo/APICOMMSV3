@@ -8,7 +8,7 @@ class Dlg_spq_avrda(Dlg_base):
     Superclase que se especializa en los dataloggers SPX_AVRDA
     '''
     def __init__(self):
-        #print("DLG SPQAVRDA")
+        #print("DLG SPQAVRDA V2")
         Dlg_base.__init__(self)
 
     # Los SPQ_AVRDA no cambian la configuracion base con la versión

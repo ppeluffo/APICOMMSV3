@@ -25,6 +25,8 @@ from dlg_spq_avrda_r110 import Dlg_spq_avrda_R110
 from dlg_spq_avrda_r120 import Dlg_spq_avrda_R120
 from dlg_spq_avrda_r130 import Dlg_spq_avrda_R130
 
+from dlg_dpd_avrda_r100 import Dlg_dpd_avrda_R100
+
 from apidlgR2_utils import version2int, format_response
 
 API_VERSION = 'R002 @ 2024-04-01'
@@ -102,6 +104,10 @@ class ApidlgR2(Resource):
             else:
                 # Por defecto usamos la version mas vieja
                 dlg = Dlg_spq_avrda_R110(d_args)
+
+        elif (dlg_type == 'DPD'):
+            dlg = Dlg_dpd_avrda_R100(d_args)
+
         else:
 
             dlg = Dlg_spx_avrda_R120(d_args)

@@ -11,6 +11,7 @@ class Dlg_base:
     y versiones de protocolo
     '''
     def __init__(self):
+        #print("DLG BASE")
         self.id = None
     
     def process_frame_ping(self, d_args=None):
@@ -154,7 +155,7 @@ class Dlg_base:
         uid = args.get('UID',None)
         update_uid2id(d_args, dlgid, uid)
 
-        app.logger.info(f"(507) process_frame_base: {dlgid} UID=,RSP=[{args.get('UID',None)}]")
+        app.logger.info(f"(507) process_frame_base: {dlgid} UID={args.get('UID',None)}")
         app.logger.info(f"(508) process_frame_base: {dlgid} IMEI={args.get('IMEI',None)}]")
         app.logger.info(f"(509) process_frame_base: {dlgid} ICCID={args.get('ICCID',None)}]")
         app.logger.info(f"(510) process_frame_base: {dlgid} CSQ={args.get('CSQ',None)}]")
