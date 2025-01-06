@@ -18,6 +18,7 @@ Versión de parche (PATCHES): Representa correcciones de errores, parches o actu
 
 import re
 import requests
+import json
 
 def u_hash(seed, line):
     '''
@@ -229,4 +230,25 @@ def convert_dataline2dict(d_url_args=None):
             d_payload[key] = d_url_args.get(key)
         #
     return d_payload
+
+def update_comms_conf( d_args=None, d_comms_conf=None):
+    '''
+    Recibo un dict {'DLGID':dlgid, 'TYPE':type, 'VER':ver, 'UID':uid, 'IMEI':imei, 'ICCID':iccid}
+    y usando la apiconf lo inserto en la BD.
+    El diccionario lo convierto a json para pasarlo como parámetro en un POST
+    '''
+    app = d_args.get('app',None)
+
+    #print(f'DEBUG: dict={d_comms_conf}')
+    j_dict = json.dumps(d_comms_conf)
+    #print(f'DEBUG: jdict={j_dict}')
+    #
+    try:
+        req = requests.post(d_args['url_conf'] + 'commsidparams', json=j_dict, timeout=10 )
+        app.logger.info("(1219) update_comms_conf INFO: Apiconf update SQL")
+    except requests.exceptions.RequestException as err: 
+        app.logger.info(f"(1220) update_comms_conf ERROR: Apiconf request exception', Err:{err}")
+        return False      
+        #
+    return True
 

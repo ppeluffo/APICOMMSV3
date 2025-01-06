@@ -3,7 +3,7 @@
 import datetime as dt
 import requests
 from flask_restful import reqparse, request
-from apidlgR2_utils import read_configuration, update_uid2id, read_debug_id, convert_dataline2dict
+from apidlgR2_utils import read_configuration, update_uid2id, read_debug_id, convert_dataline2dict, update_comms_conf
 
 class Dlg_base:
     '''
@@ -120,6 +120,8 @@ class Dlg_base:
         app = d_args.get('app',None)
 
         parser = reqparse.RequestParser()
+        parser.add_argument('TYPE', type=str ,location='args', required=False)
+        parser.add_argument('VER', type=str ,location='args', required=False)
         parser.add_argument('ID', type=str ,location='args', required=True)
         parser.add_argument('UID', type=str ,location='args', required=True)
         parser.add_argument('IMEI', type=str ,location='args', required=False)
@@ -154,6 +156,18 @@ class Dlg_base:
         # Actualizo RECOVER UID2ID
         uid = args.get('UID',None)
         update_uid2id(d_args, dlgid, uid)
+
+        # Actualizo los parámetros de comunicaciones
+        imei = args.get('IMEI',None)
+        iccid = args.get('ICCID',None)
+        type = args.get('TYPE',None)
+        ver = args.get('VER',None)
+
+        #print(f'DEBUG d_args={d_args}')
+        _ = update_comms_conf( d_args, {'DLGID':dlgid, 'TYPE':type, 'VER':ver, 'UID':uid, 'IMEI':imei, 'ICCID':iccid})
+
+        app.logger.info(f"(507) process_frame_base: {dlgid} TYPE={args.get('TYPE',None)}")
+        app.logger.info(f"(508) process_frame_base: {dlgid} VER={args.get('VER',None)}]")
 
         app.logger.info(f"(507) process_frame_base: {dlgid} UID={args.get('UID',None)}")
         app.logger.info(f"(508) process_frame_base: {dlgid} IMEI={args.get('IMEI',None)}]")

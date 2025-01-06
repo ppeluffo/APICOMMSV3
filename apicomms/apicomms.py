@@ -34,7 +34,7 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = True
+TESTING = False
 
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'
@@ -115,6 +115,9 @@ if __name__ != '__main__':
 
     app.logger.info( f'Starting ApiCOMMS: REDIS_HOST={APIREDIS_HOST}, REDIS_PORT={APIREDIS_PORT}' )
     app.logger.info( f'         ApiCOMMS: CONF_HOST={APICONF_HOST}, CONF_PORT={APICONF_PORT}' )
+    if TESTING:
+        app.logger.info( f'         ApiCOMMS: ERROR !!! TESTING True' )
+
 
 if __name__ == '__main__':
     APIREDIS_HOST = '127.0.0.1'

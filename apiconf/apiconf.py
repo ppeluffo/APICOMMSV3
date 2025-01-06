@@ -15,6 +15,10 @@ apt-get install libpq-dev
 pip install psycopg2
 
 -----------------------------------------------------------------------------
+R002 @ 2025-01-03
+- Creo un nuevo entrypoint '/apiconf/commsidparams' al cual le mando un json con 
+  el dlgid, simid, uid, iccid y crea una entrada en la bd.
+-----------------------------------------------------------------------------
 R001 @ 2023-06-17 (commsv3_apiconf:1.2)
 - En el entrypoint '/apiconf/unidades' el json que devuelvo tiene una nueva
   clave 'nro_unidades'
@@ -248,6 +252,35 @@ class BD_SQL_BASE:
         if not d_res.get('res',False):
             app.logger.info( '(105) ApiCONF_ERR007: select_user FAIL')
         return d_res
+
+    def insert_comms_id_config(self, d_config ):
+        '''
+        Inserta un nuevo usuario en la tabla usuarios
+        Retorna True/False
+        {
+            "UID": "xxxxxxxx",
+            "IMEI": "xxxxxxxx",
+            "ICCID": "xxxxxxxx",
+            "TYPE": "xxxxxxxx",
+            "VER": "xxxxxxxx"
+        }
+        '''
+        dlgid = d_config.get('DLGID',None)
+        uid = d_config.get('UID','NONE')
+        imei = d_config.get('IMEI','NONE')
+        iccid = d_config.get('ICCID','NONE')
+        type = d_config.get('TYPE','NONE')
+        ver = d_config.get('VER','NONE')
+
+        #print(f'BD_DEBUG: dlgid={dlgid},uid={uid},imei={imei},iccid={iccid}')
+
+        # Hago un INSERT:
+        sql = f"INSERT INTO comms_logs (fecha, dlgid, type, ver, uid, imei, iccid ) VALUES ('NOW()', '{dlgid}','{type}','{ver}','{uid}','{imei}','{iccid}')"
+        d_res = self.exec_sql(sql)
+        if not d_res.get('res',False):
+            app.logger.info( '(107) ApiCONF_ERR008: insert_comms_id_config FAIL')
+        return d_res
+
 
 class Kill(Resource):
     def get(self):
@@ -522,8 +555,42 @@ class Help(Resource):
             'GET /apiconf/config':' Retorna la configuracion de la unidad solicitada',
             'POST /apiconf/config':'Crea/Actualiza la configuracion de la unidad indicada',
             'GET /apiconf/unidades':' Retorna una lista con todas las unidades configuradas',
+            'POST /apiconf/commsidparams':'Actualiza la configuracion de comunicaciones de la unidad indicada',
         }
         return d_options, 200
+
+class CommsIdParams(Resource):
+            
+    def post(self):
+        '''
+        Inserta la configuracion de los parametros de comunicaciones de una unidad.
+        Recibimos un json que almacenamos.
+        No lo chequeamos !!!
+        {
+            "UID": "xxxxxxxx",
+            "IMEI": "xxxxxxxx",
+            "ICCID": "xxxxxxxx",
+        }
+        '''
+        #parser = reqparse.RequestParser()
+        #parser.add_argument('unit',type=str,location='args',required=True)
+        #args=parser.parse_args()
+        #
+        js_config = request.get_json()
+        d_config = json.loads(js_config)
+        #print(f'DEBUG d_config={d_config}')
+        #print(f'DEBUG: d_config_type={type(d_config)}')
+
+        # Lo debo re-serializar para que la BD no salte.
+        # https://stackoverflow.com/questions/26745519/converting-dictionary-to-json
+        #
+        bdsql = BD_SQL_BASE()
+        d_res =  bdsql.insert_comms_id_config(d_config)
+        if not d_res.get('res',False):
+            bdsql.close()
+            return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
+         
+        return {'rsp':'OK'}, 200
 
 api.add_resource( Kill, '/apiconf/kill')
 api.add_resource( Test, '/apiconf/test')
@@ -534,6 +601,7 @@ api.add_resource( GetTemplate, '/apiconf/template')
 api.add_resource( GetAllUnits, '/apiconf/unidades')
 api.add_resource( Config, '/apiconf/config')
 api.add_resource( Uid2id, '/apiconf/uid2id')
+api.add_resource( CommsIdParams, '/apiconf/commsidparams')
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
