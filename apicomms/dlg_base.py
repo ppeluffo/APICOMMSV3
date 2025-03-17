@@ -167,12 +167,12 @@ class Dlg_base:
         _ = update_comms_conf( d_args, {'DLGID':dlgid, 'TYPE':type, 'VER':ver, 'UID':uid, 'IMEI':imei, 'ICCID':iccid})
 
         app.logger.info(f"(507) process_frame_base: {dlgid} TYPE={args.get('TYPE',None)}")
-        app.logger.info(f"(508) process_frame_base: {dlgid} VER={args.get('VER',None)}]")
+        app.logger.info(f"(508) process_frame_base: {dlgid} VER={args.get('VER',None)}")
 
         app.logger.info(f"(507) process_frame_base: {dlgid} UID={args.get('UID',None)}")
-        app.logger.info(f"(508) process_frame_base: {dlgid} IMEI={args.get('IMEI',None)}]")
-        app.logger.info(f"(509) process_frame_base: {dlgid} ICCID={args.get('ICCID',None)}]")
-        app.logger.info(f"(510) process_frame_base: {dlgid} CSQ={args.get('CSQ',None)}]")
+        app.logger.info(f"(508) process_frame_base: {dlgid} IMEI={args.get('IMEI',None)}")
+        app.logger.info(f"(509) process_frame_base: {dlgid} ICCID={args.get('ICCID',None)}")
+        app.logger.info(f"(510) process_frame_base: {dlgid} CSQ={args.get('CSQ',None)}")
 
         debugid = read_debug_id(d_args)
         # Calculo el hash de la configuracion de la BD.
@@ -464,6 +464,7 @@ class Dlg_base:
         app = d_args.get('app',None)
 
         # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
+        # ID=SPQTEST&HW=SPQ_AVRDA&TYPE=FWDLGX&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
         # request.args es un dict con todos los pares key:value del url.
         parser = reqparse.RequestParser()
         parser.add_argument('ID', type=str ,location='args', required=True)

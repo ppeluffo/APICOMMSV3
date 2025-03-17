@@ -20,12 +20,15 @@ from dlg_spx_avrda_r120 import Dlg_spx_avrda_R120
 
 from dlg_spx_xmega_r110 import Dlg_spx_xmega_R110 
 from dlg_spx_xmega_r120 import Dlg_spx_xmega_R120
+from dlg_spx_xmega_r130 import Dlg_spx_xmega_R130
 
 from dlg_spq_avrda_r110 import Dlg_spq_avrda_R110
 from dlg_spq_avrda_r120 import Dlg_spq_avrda_R120
 from dlg_spq_avrda_r130 import Dlg_spq_avrda_R130
 
 from dlg_dpd_avrda_r100 import Dlg_dpd_avrda_R100
+
+from dlg_fwdlgx_r100 import Dlg_fwdlgx_R100
 
 from apidlgR2_utils import version2int, format_response
 
@@ -53,9 +56,11 @@ class ApidlgR2(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('TYPE', type=str ,location='args', required=True)
         parser.add_argument('VER', type=str ,location='args', required=True)
+        parser.add_argument('HW', type=str ,location='args', required=False)
         args = parser.parse_args()
         dlg_type = args['TYPE']
         dlg_ver = args['VER']
+        dlg_hw = args.get('HW','NONE')
         # El chequeo de errores se hace porque parse_args() aborta y retorna None
         if dlg_type is None:
             raw_response = 'ERROR:FAIL TO PARSE'
@@ -76,7 +81,16 @@ class ApidlgR2(Resource):
                   'url_redis': f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/",
                   'url_conf':f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/" }
 
-        if (dlg_type == 'SPX_AVRDA') or (dlg_type == 'SPXR2'):
+        # El nuevo firmware unificado es solo FWDLGX
+        if ( dlg_type == 'FWDLGX'):
+            if dlg_ifw_ver <= 100:
+                dlg = Dlg_fwdlgx_R100(d_args)
+            else:
+                # Por defecto usamos la version mas vieja
+                dlg = Dlg_fwdlgx_R100(d_args)
+
+        # Versiones anteriores.
+        elif (dlg_type == 'SPX_AVRDA') or (dlg_type == 'SPXR2'):
             if dlg_ifw_ver <= 110:
                 dlg = Dlg_spx_avrda_R110(d_args)
             elif dlg_ifw_ver <= 120:
@@ -90,6 +104,9 @@ class ApidlgR2(Resource):
                 dlg = Dlg_spx_xmega_R110(d_args)
             elif dlg_ifw_ver <= 120:
                 dlg = Dlg_spx_xmega_R120(d_args)
+            elif dlg_ifw_ver <= 130:
+                # 2025-02-28: FWDLGX
+                dlg = Dlg_spx_xmega_R130(d_args)
             else:
                 # Por defecto usamos la version mas vieja
                 dlg = Dlg_spx_xmega_R110(d_args)

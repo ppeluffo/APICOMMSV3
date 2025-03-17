@@ -34,7 +34,7 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = False
+TESTING = True
 
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'

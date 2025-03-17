@@ -3,14 +3,15 @@
 from dlg_base import Dlg_base
 from dlg_spx_avrda import Dlg_spx_avrda
 
-class Dlg_spx_xmega(Dlg_spx_avrda, Dlg_base):
+#class Dlg_spx_xmega(Dlg_spx_avrda, Dlg_base):
+class Dlg_spx_xmega(Dlg_spx_avrda):
     '''
-    Superclase que se especializa en los dataloggers SPX_AVRDA
+    Superclase que se especializa en los dataloggers SPX_XMEGA
     '''
     def __init__(self):
-        print("DLG SPXAVRDA")
+        print("DLG SPX_XMEGA")
 
-    # Los SPX_AVRDA no cambian la configuracion base con la versión
+    # Los SPX_XMEGA no cambian la configuracion base con la versión
 
     def get_base_hash_from_config(self, d_conf=None):
         return Dlg_spx_avrda.get_base_hash_from_config(self, d_conf)
