@@ -2,6 +2,11 @@
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
+R003 @ 2025-04-28:
+- Agrego un TAG que me indique el timestamp de lo que demoran las transacciones
+  y si terminan. 
+  Esto es porque parece que hay veces que el servidor deja de responder.
+
 R002 @ 2023-09-13: (commsv3_apicomms:1.2)
 - Agrego a la configuracion las consignas
 
@@ -30,21 +35,25 @@ from dlg_dpd_avrda_r100 import Dlg_dpd_avrda_R100
 
 from dlg_fwdlgx_r100 import Dlg_fwdlgx_R100
 
-from apidlgR2_utils import version2int, format_response
+from apidlgR2_utils import version2int, format_response, tag_generator, tagLog
 
-API_VERSION = 'R002 @ 2024-04-01'
+API_VERSION = 'R003 @ 2025-04-28'
 
+
+#--------------------------------------------------------------------------------------------
 class ApidlgR2(Resource):
     ''' 
     Clase especializada en atender los dataloggers
     Recibe como kwargs un diccionario con 2 claves: una es la app flask ppal
     que es la que tiene el link del log handler, y otro es un diccionario de los
     servidores de las api auxiliares.
+    Al invocarlo ya genero el TAG para identificar la conexión
     '''
     def __init__(self, **kwargs):
         self.app = kwargs['app']
         self.servers = kwargs['servers']
         self.qs = None
+        self.tag = tag_generator()
         
     def get(self):
         ''' 
@@ -57,10 +66,14 @@ class ApidlgR2(Resource):
         parser.add_argument('TYPE', type=str ,location='args', required=True)
         parser.add_argument('VER', type=str ,location='args', required=True)
         parser.add_argument('HW', type=str ,location='args', required=False)
+        parser.add_argument('ID', type=str ,location='args', required=False)
+        parser.add_argument('CLASS', type=str ,location='args', required=False)
         args = parser.parse_args()
         dlg_type = args['TYPE']
         dlg_ver = args['VER']
         dlg_hw = args.get('HW','NONE')
+        dlg_id = args.get('ID','NONE')
+        dlg_frame = args.get('CLASS','NONE')
         # El chequeo de errores se hace porque parse_args() aborta y retorna None
         if dlg_type is None:
             raw_response = 'ERROR:FAIL TO PARSE'
@@ -70,8 +83,8 @@ class ApidlgR2(Resource):
             return response, status_code
 
         dlg_ifw_ver = version2int(dlg_ver)
-        #print(f'TYPE={dlg_type}, VER={dlg_ver}, IFW={dlg_ifw_ver}')
         
+        #print(f'TAG={self.tag} LB=START TS={timestamp()} ID={id} TYPE={dlg_type} VER={dlg_ver} HW={dlg_hw}')
         # Hago un selector del tipo y protocolo para seleccionar el objeto que
         # tiene la representacion mas adecuada
         # Debemos pasarle la app y los servers para que hagan el log por la app.
@@ -80,6 +93,11 @@ class ApidlgR2(Resource):
                   'qs':self.qs,
                   'url_redis': f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/",
                   'url_conf':f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/" }
+
+        # Log en pantalla y redis para monitorear la aplicacion
+        tagLog( redis_url=d_args.get('url_redis',None), 
+               args={'LABEL':'START', 'TAG':self.tag, 'ID':dlg_id,'TYPE':dlg_type,'VER':dlg_ver,'HW':dlg_hw, 'CLASS':dlg_frame} 
+               )
 
         # El nuevo firmware unificado es solo FWDLGX
         if ( dlg_type == 'FWDLGX'):
@@ -132,5 +150,10 @@ class ApidlgR2(Resource):
         # Proceso el frame y envio la respuesta
         (raw_response, status_code) = dlg.process_frame()
         response = format_response(raw_response)
+
+        tagLog( redis_url=d_args.get('url_redis',None), 
+               args={'LABEL':'STOP', 'TAG':self.tag } 
+               )
+
         return response, status_code
     

@@ -7,7 +7,7 @@ max_requests_jitter = 50
 # Si queremos el log en stdout
 log_file = "-"
 #workers = multiprocessing.cpu_count() * 2 + 1
-workers = 5
+workers = 10
 bind = '0.0.0.0:5000'
 #worker_class = 'sync'
 loglevel = 'info'

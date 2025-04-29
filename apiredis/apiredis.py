@@ -715,6 +715,107 @@ class QueueItems(Resource):
         d_rsp = { 'ldatos':l_datos}
         return d_rsp, 200
     
+class LogQueuePush(Resource):
+    # Encola la linea en LOG_QUEUE para su posterior procesamiento
+    
+    def put(self):
+        ''' Recibe un string que lo serializa y almacena en la cola
+
+            data = "TAG=CPN7Z9N8J LB=START TS=2025-04-29 08:47:34.414475 ID=DNOTQ001 TYPE=SPQ_AVRDA VER=1.1.0 HW=None CLASS=PING"
+            j_data = json.dumps(data)
+            req=requests.put('http://127.0.0.1:5100/apiredis/dataline', json=j_data)
+            json.loads(req.json())
+
+        '''
+        """
+        parser = reqparse.RequestParser()
+        parser.add_argument('queue_name',type=str,location='args',required=True)
+        args=parser.parse_args()
+        queue_name = args.get('queue_name', None)
+        """
+        queue_name = 'LOG_QUEUE'
+        #
+        # get_json() convierte el objeto JSON a un python dict !!!
+        jd_params = request.get_json()
+        d_params = json.loads(jd_params)
+        #print(f'DEBUG_REDIS={d_params}')
+        payload = d_params['log_data']
+        #print(f'DEBUG_PAYLOAD={payload}')
+        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
+        try:
+            _ = rh.rpush( queue_name, payload)
+        except redis.ConnectionError:
+            app.logger.info( f'(020) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
+            return d_rsp, 500
+        #
+
+        return {'rsp':'OK'},200
+
+class LogQueueLength(Resource):
+
+    def get(self):
+        ''' 
+        Retorna el largo de la cola pasasa como parametro
+
+        Testing:
+        req=requests.get('http://127.0.0.1:5100/apiredis/queuelength',params={'qname':'RXDATA_QUEUE'})
+        json.loads(req.json())
+        {'qname': 'RXDATA_QUEUE', 'length': 595}
+        '''
+        #
+        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+        try:
+            qlength = rh.llen('LOG_QUEUE')
+        except redis.ConnectionError:
+            app.logger.info( f'(021) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
+            return d_rsp, 500
+        #
+        if qlength is None:
+            app.logger.info( f'(022) ApiREDIS_ERR006: No qlength rcd')
+            return {},204   # NO CONTENT
+        #
+        d_resp =  {'qname': 'LOG_QUEUE', 'length': qlength}
+        return d_resp,200
+        
+class LogQueuePop(Resource):
+  
+   def get(self):
+        ''' 
+        Retorna los elementos de una cola
+
+        Testing:
+        req=requests.get('http://127.0.0.1:5100/apiredis/queueitems',params={'qname':'RXDATA_QUEUE','count':5})
+        l_datos = json.loads(req.json())
+        '''
+        parser = reqparse.RequestParser()
+        parser.add_argument('count',type=str,location='args',required=True)
+        args=parser.parse_args()
+        #
+        nro_regs = args.get('count',0)
+        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+        try:
+            l_datos = []
+            l_datos = rh.lpop('LOG_QUEUE', nro_regs)
+        except redis.ConnectionError:
+            app.logger.info( f'(023) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
+            d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
+            return d_rsp, 500
+        #
+        if l_datos is None:
+            app.logger.info( f'(024) ApiREDIS_ERR005: No l_pkdatos rcd')
+            return {},204   # NO CONTENT
+        #
+        l_datos = [ x.decode() for x in l_datos ]
+        d_rsp = { 'ldatos':l_datos}
+
+        #print(d_rsp)
+        return d_rsp, 200
+        #return {'rsp':'OK'},200
+
+
 class Stats(Resource):
 
     def get(self):
@@ -801,6 +902,9 @@ api.add_resource( OrdenesAtvise, '/apiredis/ordenesatvise')
 api.add_resource( DataLine, '/apiredis/dataline')
 api.add_resource( QueueLength, '/apiredis/queuelength')
 api.add_resource( QueueItems, '/apiredis/queueitems')
+api.add_resource( LogQueuePush, '/apiredis/logqueuepush')
+api.add_resource( LogQueuePop, '/apiredis/logqueuepop')
+api.add_resource( LogQueueLength, '/apiredis/logqueuelength')
 api.add_resource( Stats, '/apiredis/stats')
 api.add_resource( Test, '/apiredis/test')
 

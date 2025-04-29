@@ -25,7 +25,7 @@ from apioceanus import ApiOceanus
 app = Flask(__name__)
 api = Api(app)
  
-API_VERSION = 'R002 @ 2023-09-26'
+API_VERSION = 'R003 @ 2025-04-28'
 
 APIREDIS_HOST = os.environ.get('APIREDIS_HOST', 'apiredis')
 APIREDIS_PORT = os.environ.get('APIREDIS_PORT', '5100')
@@ -34,7 +34,7 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = True
+TESTING = False
 
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'

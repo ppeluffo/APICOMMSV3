@@ -23,6 +23,7 @@ import struct
 import requests
 import apiplc_utils
 from apicomms_common import Utils
+from apidlgR2_utils import tag_generator, tagLog
 
 API_VERSION = 'R001 @ 2023-06-15'
 
@@ -44,6 +45,7 @@ class ApiPlc(Resource):
         self.url_redis = f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/"
         self.url_conf = f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/"
         self.f_reset_unit = False
+        self.tag = tag_generator()
 
     def __process_ping__(self, rx_payload):
         '''
@@ -298,6 +300,11 @@ class ApiPlc(Resource):
         self.VER = self.args['VER']
         self.TYPE = self.args['TYPE']
     
+        # Log en pantalla y redis para monitorear la aplicacion
+        tagLog( redis_url=self.url_redis, 
+               args={'LABEL':'START', 'TAG':self.tag, 'ID':self.ID,'TYPE':self.TYPE,'VER':self.TYPE } 
+               )
+        
         utils=Utils( {'id':self.ID, 'app':self.app, 'servers':self.servers} )
 
         # Leo el debugdlgid
@@ -344,4 +351,8 @@ class ApiPlc(Resource):
         response.headers['Content-type'] = 'application/binary'
         #if self.ID == self.debug_unit_id:
         self.app.logger.info(f"(665) ApiPLC_INFO: ID={self.ID}, RSP={sresp}")
+
+        tagLog( redis_url=self.url_redis, 
+               args={'LABEL':'END', 'TAG':self.tag } 
+               )
         return response

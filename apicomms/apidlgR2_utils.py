@@ -19,6 +19,45 @@ Versión de parche (PATCHES): Representa correcciones de errores, parches o actu
 import re
 import requests
 import json
+import string
+import random
+import datetime
+
+
+def tagLog(redis_url, args={}, verbose=True):
+
+    timestamp = datetime.datetime.now()
+
+    tag = args.pop('TAG', None)
+    label = args.pop('LABEL', None)
+    slog = f"TAG={tag} LB={label} TS={timestamp}"
+
+    for k in args:
+        slog += f" {k}={args.get(k,'NONE')}"
+    if verbose:
+        print(slog)
+
+    # Inserto en la redis a travez de la API
+    d_payload = {'log_data': slog}
+    jd_payload = json.dumps(d_payload)
+    r_datos = requests.put(redis_url + 'logqueuepush', json=jd_payload, timeout=10 )
+    if r_datos.status_code != 200:
+        # Si da error genero un mensaje pero continuo para no trancar al datalogger.
+        print(f"(1102) process_frame_data INFO: ERROR AL GUARDAR LOG EN REDIS. Err=({r_datos.status_code}){r_datos.text}")
+        print(redis_url)
+        #
+    return slog
+
+def timestamp():
+    return datetime.datetime.now()
+
+def tag_generator(size=9, chars=string.ascii_uppercase + string.digits):
+    """
+    Genera un tag de 6 caracteres unico para identificar las conexiones
+    https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits
+    """
+    return ''.join(random.choice(chars) for _ in range(size))
+
 
 def u_hash(seed, line):
     '''
