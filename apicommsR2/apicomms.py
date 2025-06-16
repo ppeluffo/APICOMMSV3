@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMS/venv/bin/python
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
@@ -17,10 +17,10 @@ import logging
 import requests
 from flask import Flask
 from flask_restful import Resource, Api
-#from apidlg import ApiDlg
-from apidlgR2 import ApidlgR2
+
+from apidlg import Apidlg
+from prot_oceanus.apioceanus import ApiOceanus
 from apiplc import ApiPlc
-from apioceanus import ApiOceanus
 
 app = Flask(__name__)
 api = Api(app)
@@ -101,13 +101,11 @@ class Test(Resource):
         return response, 200
 
 api.add_resource( ApiPlc, '/apiplc', resource_class_kwargs={ 'app': app, 'servers':servers })
-#api.add_resource( ApiDlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
-api.add_resource( ApidlgR2, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( ApiOceanus, '/apioceanus', resource_class_kwargs={ 'app': app, 'servers':servers })
+api.add_resource( Apidlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( Help,   '/apicomms/help')
 api.add_resource( Ping,   '/apicomms/ping')
 api.add_resource( Test,   '/apicomms/test')
-
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')

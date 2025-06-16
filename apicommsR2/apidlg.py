@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMS/venv/bin/python
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
@@ -20,30 +20,30 @@ R001 @ 2023-06-15: (commsv3_apicomms:1.1)
 '''
 
 from flask_restful import Resource, request, reqparse
-from dlg_spx_avrda_r110 import Dlg_spx_avrda_R110
-from dlg_spx_avrda_r120 import Dlg_spx_avrda_R120
 
-from dlg_spx_xmega_r110 import Dlg_spx_xmega_R110 
-from dlg_spx_xmega_r120 import Dlg_spx_xmega_R120
-from dlg_spx_xmega_r130 import Dlg_spx_xmega_R130
+from baseutils.baseutils import version2int, format_response, tag_generator, tagLog
 
-from dlg_spq_avrda_r110 import Dlg_spq_avrda_R110
-from dlg_spq_avrda_r120 import Dlg_spq_avrda_R120
-from dlg_spq_avrda_r130 import Dlg_spq_avrda_R130
+from prot_fwdlgx.fwdlgxR10X import FwdlgxR10X
+from prot_fwdlgx.fwdlgxR11X import FwdlgxR11X
 
-from dlg_dpd_avrda_r100 import Dlg_dpd_avrda_R100
+from prot_spxavrda.spxavrdaR11X import SpxavrdaR11X
+from prot_spxavrda.spxavrdaR12X import SpxavrdaR12X
 
-from dlg_fwdlgx_r100 import Dlg_fwdlgx_R100
+from prot_spxxmega.spxxmegaR11X import SpxxmegaR11X
+from prot_spxxmega.spxxmegaR12X import SpxxmegaR12X
+from prot_spxxmega.spxxmegaR13X import SpxxmegaR13X
 
-from dlg_fwdlgx_r110 import Dlg_fwdlgx_R110
+from prot_spqavrda.spqavrdaR11X import SpqavrdaR11X
+from prot_spqavrda.spqavrdaR12X import SpqavrdaR12X
+from prot_spqavrda.spqavrdaR13X import SpqavrdaR13X
 
-from apidlgR2_utils import version2int, format_response, tag_generator, tagLog
+from prot_dpdavrda.dpdavrdaR10X import DpdavrdaR10X
 
 API_VERSION = 'R003 @ 2025-04-28'
 
 
 #--------------------------------------------------------------------------------------------
-class ApidlgR2(Resource):
+class Apidlg(Resource):
     ''' 
     Clase especializada en atender los dataloggers
     Recibe como kwargs un diccionario con 2 claves: una es la app flask ppal
@@ -71,20 +71,20 @@ class ApidlgR2(Resource):
         parser.add_argument('ID', type=str ,location='args', required=False)
         parser.add_argument('CLASS', type=str ,location='args', required=False)
         args = parser.parse_args()
-        dlg_type = args['TYPE']
-        dlg_ver = args['VER']
+        fw_type = args.get('TYPE',None)
+        fw_ver = args.get('VER','0.0.0')
         dlg_hw = args.get('HW','NONE')
         dlg_id = args.get('ID','NONE')
         dlg_frame = args.get('CLASS','NONE')
         # El chequeo de errores se hace porque parse_args() aborta y retorna None
-        if dlg_type is None:
+        if fw_type is None:
             raw_response = 'ERROR:FAIL TO PARSE'
             status_code = 500
             self.app.logger.info(f"(101) Rcvd Frame ERROR: RSP=[{raw_response}]")
             response = format_response(raw_response)
             return response, status_code
 
-        dlg_ifw_ver = version2int(dlg_ver)
+        ifw_ver = version2int(fw_ver)
 
         #print(f'TAG={self.tag} LB=START TS={timestamp()} ID={id} TYPE={dlg_type} VER={dlg_ver} HW={dlg_hw}')
         # Hago un selector del tipo y protocolo para seleccionar el objeto que
@@ -98,58 +98,67 @@ class ApidlgR2(Resource):
 
         # Log en pantalla y redis para monitorear la aplicacion
         tagLog( redis_url=d_args.get('url_redis',None), 
-               args={'LABEL':'START', 'TAG':self.tag, 'ID':dlg_id,'TYPE':dlg_type,'VER':dlg_ver,'HW':dlg_hw, 'CLASS':dlg_frame} 
+               args={'LABEL':'START', 'TAG':self.tag, 'ID':dlg_id,'TYPE':fw_type,'VER':fw_ver,'HW':dlg_hw, 'CLASS':dlg_frame} 
                )
 
         # El nuevo firmware unificado es solo FWDLGX
-        if ( dlg_type == 'FWDLGX'):
-            if dlg_ifw_ver <= 103:
-                dlg = Dlg_fwdlgx_R100(d_args)
-            elif dlg_ifw_ver <= 110:
-                dlg = Dlg_fwdlgx_R110(d_args)
+        if ( fw_type == 'FWDLGX'):
+            # [('1.0.2', 59), ('1.0.1', 18), ('1.0.0', 6), ('1.0.3', 6), ('1.0.4', 1)]
+            if ifw_ver == 100:
+                # ('1.0.0', 6), ('1.0.1', 18),('1.0.2', 59),('1.0.3', 6), ('1.0.4', 1)
+                dlg = FwdlgxR10X(d_args)
+            elif ifw_ver == 110:
+                dlg = FwdlgxR11X(d_args)
             else:
                 # Por defecto usamos la version mas vieja
-                dlg = Dlg_fwdlgx_R100(d_args)
-
+                dlg = FwdlgxR10X(d_args)
+        
         # Versiones anteriores.
-        elif (dlg_type == 'SPX_AVRDA') or (dlg_type == 'SPXR2'):
-            if dlg_ifw_ver <= 110:
-                dlg = Dlg_spx_avrda_R110(d_args)
-            elif dlg_ifw_ver <= 120:
-                dlg = Dlg_spx_avrda_R120(d_args)
+        elif (fw_type == 'SPX_AVRDA') or (fw_type == 'SPXR2'):
+            # SPXR2->('1.1.0', 14)
+            # SPX_AVRDA->('1.2.0', 107)
+            if ifw_ver == 110:
+                dlg = SpxavrdaR11X(d_args)
+            elif ifw_ver == 120:
+                dlg = SpxavrdaR12X(d_args)
             else:
                 # Por defecto usamos la version mas vieja
-                dlg = Dlg_spx_avrda_R110(d_args)
+                dlg = SpxavrdaR11X(d_args)
 
-        elif (dlg_type == 'SPX_XMEGA') or (dlg_type == 'SPXR3'):
-            if dlg_ifw_ver <= 110:
-                dlg = Dlg_spx_xmega_R110(d_args)
-            elif dlg_ifw_ver <= 120:
-                dlg = Dlg_spx_xmega_R120(d_args)
-            elif dlg_ifw_ver <= 130:
+        elif (fw_type == 'SPX_XMEGA') or (fw_type == 'SPXR3'):
+            # SPXR3->('1.1.0', 96)
+            # SPX_XMEGA->[('1.2.0', 2)]
+            if ifw_ver <= 110:
+                dlg = SpxxmegaR11X(d_args)
+            elif ifw_ver <= 120:
+                dlg = SpxxmegaR12X(d_args)
+            elif ifw_ver <= 130:
                 # 2025-02-28: FWDLGX
-                dlg = Dlg_spx_xmega_R130(d_args)
+                dlg = SpxxmegaR13X(d_args)
             else:
                 # Por defecto usamos la version mas vieja
-                dlg = Dlg_spx_xmega_R110(d_args)
+                dlg = SpxxmegaR11X(d_args)
 
-        elif (dlg_type == 'SPQ_AVRDA'):
-            if dlg_ifw_ver <= 110:
-                dlg = Dlg_spq_avrda_R110(d_args)
-            elif dlg_ifw_ver <= 120:
-                dlg = Dlg_spq_avrda_R120(d_args)
-            elif dlg_ifw_ver <= 130:
-                dlg = Dlg_spq_avrda_R130(d_args)
+        elif (fw_type == 'SPQ_AVRDA'):
+            # SPQ_AVRDA->[('1.3.7', 56), ('1.2.6', 6), ('1.3.9', 27), ('1.3.3', 15), ('1.3.6', 13), ('1.3.4', 1)]
+            if ifw_ver <= 110:
+                dlg = SpqavrdaR11X(d_args)
+            elif ifw_ver <= 120:
+                dlg = SpqavrdaR12X(d_args)
+            elif ifw_ver <= 130:
+                dlg = SpqavrdaR13X(d_args)
             else:
                 # Por defecto usamos la version mas vieja
-                dlg = Dlg_spq_avrda_R110(d_args)
+                dlg = SpqavrdaR11X(d_args)
 
-        elif (dlg_type == 'DPD'):
-            dlg = Dlg_dpd_avrda_R100(d_args)
+        elif (fw_type == 'DPD'):
+            # DPD->[('1.0.7', 1)]
+            dlg = DpdavrdaR10X(d_args)
 
         else:
 
-            dlg = Dlg_spx_avrda_R120(d_args)
+            # Por defecto usamos la version mas vieja
+             dlg = FwdlgxR10X(d_args)
 
         # Proceso el frame y envio la respuesta
         (raw_response, status_code) = dlg.process_frame()

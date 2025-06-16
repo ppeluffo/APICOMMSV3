@@ -3,6 +3,7 @@
 from dlg_fwdlgx import Dlg_fwdlgx
 from apidlgR2_utils import str2int, u_hash
 
+
 class Dlg_fwdlgx_R100(Dlg_fwdlgx):
     '''
     '''

@@ -524,6 +524,115 @@ class Dlg_base:
     
     ############################################################################################
 
+    def process_frame_confall(self, d_args=None):
+        '''
+        2025/06/03:
+        En este frame V1 mandamos el hash de todos los modulos de una sola vez.
+        Se chequean y c/u que deba actualizarse se envia al datalogger.
+        En caso que están todos ok, el tiempo se reduce mucho.
+
+        ERRORES: 5XX
+        '''
+        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11
+        # ID=SPQTEST&TYPE=SPQ_AVRDA&VER=1.2.3&CLASS=CONFV1&UID=42138365900098090136013700000000&IMEI=868191051391785
+        #      &ICCID=8959801023149326185F&CSQ=51&BH=0x42&AH=0x52&CH=0x62&MH=0x72&PH=0x82
+
+        app = d_args.get('app',None)
+
+        parser = reqparse.RequestParser()
+        parser.add_argument('TYPE', type=str ,location='args', required=False)
+        parser.add_argument('VER', type=str ,location='args', required=False)
+        parser.add_argument('ID', type=str ,location='args', required=True)
+        parser.add_argument('UID', type=str ,location='args', required=True)
+        parser.add_argument('IMEI', type=str ,location='args', required=False)
+        parser.add_argument('ICCID', type=str ,location='args', required=False)
+        parser.add_argument('CSQ', type=str ,location='args', required=False)
+        parser.add_argument('BH', type=str ,location='args', required=True)
+        parser.add_argument('AH', type=str ,location='args', required=True)
+        parser.add_argument('CH', type=str ,location='args', required=True)
+        parser.add_argument('MH', type=str ,location='args', required=True)
+        parser.add_argument('GH', type=str ,location='args', required=True)
+
+        args = parser.parse_args()
+        dlgid = args.get('ID',None)
+        # El chequeo de errores se hace porque parse_args() aborta y retorna None
+        if dlgid is None:
+            app.logger.info("(500) process_frame_base ERROR: No dlgid")
+            response = 'ERROR:NO DLGID'
+            status_code = 500
+            app.logger.info(f"(501)process_frame_base ERROR: RSP=[{response}]")
+            return response, status_code
+        
+        # Leo la configuracion del datalogger
+        d_conf = read_configuration(d_args, dlgid)
+        # Chequeo la configuracion
+        if d_conf is None:
+            response = 'CLASS=CONF_BASE&CONFIG=ERROR' 
+            status_code = 200
+            app.logger.info(f"(503) process_frame_base ERROR: ID={dlgid},RSP=[{response}]")
+            return response, status_code
+        
+        if ('BH' not in d_conf.keys() ) or ('AH' not in d_conf.keys() ) or ('CH' not in d_conf.keys() ):
+            app.logger.info("(502) process_frame_base ERROR: NO BH in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+    
+        # Actualizo RECOVER UID2ID
+        uid = args.get('UID',None)
+        update_uid2id(d_args, dlgid, uid)
+
+        # Actualizo los parámetros de comunicaciones
+        imei = args.get('IMEI',None)
+        iccid = args.get('ICCID',None)
+        type = args.get('TYPE',None)
+        ver = args.get('VER',None)
+
+        #print(f'DEBUG d_args={d_args}')
+        _ = update_comms_conf( d_args, {'DLGID':dlgid, 'TYPE':type, 'VER':ver, 'UID':uid, 'IMEI':imei, 'ICCID':iccid})
+
+        app.logger.info(f"(507) process_frame_base: {dlgid} TYPE={args.get('TYPE',None)}")
+        app.logger.info(f"(508) process_frame_base: {dlgid} VER={args.get('VER',None)}")
+
+        app.logger.info(f"(507) process_frame_base: {dlgid} UID={args.get('UID',None)}")
+        app.logger.info(f"(508) process_frame_base: {dlgid} IMEI={args.get('IMEI',None)}")
+        app.logger.info(f"(509) process_frame_base: {dlgid} ICCID={args.get('ICCID',None)}")
+        app.logger.info(f"(510) process_frame_base: {dlgid} CSQ={args.get('CSQ',None)}")
+
+        debugid = read_debug_id(d_args)
+
+        # Calculo el hash de la configuracion de la BD.
+        bh_hash = self.get_base_hash_from_config(d_conf)
+        ah_hash = self.get_ainputs_hash_from_config(d_conf)
+        ch_hash = self.get_counters_hash_from_config(d_conf)
+        mh_hash = self.get_modbus_hash_from_config(d_conf)
+        gh_hash = self.get_consigna_hash_from_config(d_conf)
+
+        if dlgid == debugid:
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: bd_BH={bh_hash}, dlg_BH={int(args['BH'],16)}")
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: bd_AH={ah_hash}, dlg_AH={int(args['AH'],16)}")
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: bd_CH={ch_hash}, dlg_CH={int(args['CH'],16)}")
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: bd_MH={mh_hash}, dlg_MH={int(args['MH'],16)}")
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: bd_GH={gh_hash}, dlg_GH={int(args['GH'],16)}")
+
+        response = "CLASS=CONF_ALL"
+        status_code = 200
+        if bh_hash != int(args['BH'],16):
+            response += "&BASE"
+        if ah_hash != int(args['AH'],16):
+            response += "&ANALOG"
+        if ch_hash != int(args['CH'],16):
+            response += "&COUNTERS"
+        if mh_hash != int(args['MH'],16):
+            response += "&MODBUS"
+        if gh_hash != int(args['GH'],16):
+            response += "&CONSIGNA"
+           
+        app.logger.info(f"(505) process_frame_base: ID={dlgid},RSP=[{response}]")
+        return response, status_code
+            
+    ############################################################################################
+
     def process_frame(self, d_args=None):
         '''
         Metodo global general de procesamiento de frames
@@ -544,31 +653,35 @@ class Dlg_base:
 
         # Proceso de acuerdo a la CLASE de frame recibido
         if args['CLASS'] == 'PING':
-            return self.process_frame_ping()
+            return self.process_frame_ping(d_args)
             
         if  args['CLASS'] == 'RECOVER':
-            return self.process_frame_recover() 
+            return self.process_frame_recover(d_args)
         
         if  args['CLASS'] == 'CONF_BASE':
-            return self.process_frame_base()
+            return self.process_frame_base(d_args)
 
         if  args['CLASS'] == 'CONF_AINPUTS':
-            return self.process_frame_ainputs() 
+            return self.process_frame_ainputs(d_args)
         
         if  args['CLASS'] == 'CONF_COUNTERS':
-            return self.process_frame_counters() 
+            return self.process_frame_counters(d_args)
 
         if args['CLASS'] == 'CONF_MODBUS':
-            return self.process_frame_modbus()
+            return self.process_frame_modbus(d_args)
 
         if args['CLASS'] == 'CONF_PILOTO':
-            return self.process_frame_piloto()
+            return self.process_frame_piloto(d_args)
 
         if args['CLASS'] == 'CONF_CONSIGNA':
-            return self.process_frame_consigna()
+            return self.process_frame_consigna(d_args)
         
         if args['CLASS'] == 'DATA':
-            return self.process_frame_data()
+            return self.process_frame_data(d_args)
+        
+        if args['CLASS'] == 'CONF_ALL':
+            return self.process_frame_confall(d_args)
+        
         
         # Catch all errors
         response = 'FAIL'
