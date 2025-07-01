@@ -20,6 +20,7 @@ R001 @ 2023-06-15: (commsv3_apicomms:1.1)
 '''
 
 from flask_restful import Resource, request, reqparse
+from flask import Response 
 
 from baseutils.baseutils import version2int, format_response, tag_generator, tagLog
 
@@ -62,6 +63,7 @@ class Apidlg(Resource):
         Procesa los GET de los dataloggers: configuracion y datos.
         '''
         self.qs = request.query_string
+        #self.qs = request.query_string.decode('utf-8')
         self.app.logger.info("(100) Rcvd Frame: aQS=%(a)s", {'a': self.qs })
 
         parser = reqparse.RequestParser()
@@ -162,11 +164,13 @@ class Apidlg(Resource):
 
         # Proceso el frame y envio la respuesta
         (raw_response, status_code) = dlg.process_frame()
-        response = format_response(raw_response)
+        if raw_response is not None:
+            response = format_response(raw_response)
 
         tagLog( redis_url=d_args.get('url_redis',None), 
                args={'LABEL':'STOP', 'TAG':self.tag } 
                )
-
-        return response, status_code
-    
+        if raw_response is not None:
+            return response, status_code
+        else:
+            return Response(status=204)

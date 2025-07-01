@@ -289,4 +289,20 @@ def update_comms_conf( d_args=None, d_comms_conf=None):
         #
     return True
 
+def convert_line2dict (line=None):
+    '''
+    1&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
+    '''
+    d_payload = {}
+    pairs=line.split('&') 
+    for t in pairs:
+        try:
+            if "=" in t:
+                key,value=t.split('=')
+                d_payload[key] = value   
+        except:
+            pass
+    return d_payload
+
+
 

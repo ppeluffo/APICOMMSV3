@@ -21,9 +21,9 @@ from flask_restful import Resource, reqparse
 from pymodbus.utilities import computeCRC
 import struct
 import requests
-import apiplc_utils
+import baseutils.apiplc_utils as apiplc_utils
 from apicomms_common import Utils
-from apidlgR2_utils import tag_generator, tagLog
+from baseutils.baseutils import tag_generator, tagLog
 
 API_VERSION = 'R001 @ 2023-06-15'
 

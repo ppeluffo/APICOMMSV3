@@ -1,4 +1,3 @@
-#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
 '''
 ERRORES 12XX
 
@@ -57,7 +56,6 @@ def tag_generator(size=9, chars=string.ascii_uppercase + string.digits):
     https://stackoverflow.com/questions/2257441/random-string-generation-with-upper-case-letters-and-digits
     """
     return ''.join(random.choice(chars) for _ in range(size))
-
 
 def u_hash(seed, line):
     '''
@@ -290,4 +288,21 @@ def update_comms_conf( d_args=None, d_comms_conf=None):
         return False      
         #
     return True
+
+def convert_line2dict (line=None):
+    '''
+    1&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
+    '''
+    d_payload = {}
+    pairs=line.split('&') 
+    for t in pairs:
+        try:
+            if "=" in t:
+                key,value=t.split('=')
+                d_payload[key] = value   
+        except:
+            pass
+    return d_payload
+
+
 

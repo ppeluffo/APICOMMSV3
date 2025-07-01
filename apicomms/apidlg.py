@@ -1,7 +1,12 @@
-#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMS/venv/bin/python
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
+R003 @ 2025-04-28:
+- Agrego un TAG que me indique el timestamp de lo que demoran las transacciones
+  y si terminan. 
+  Esto es porque parece que hay veces que el servidor deja de responder.
+
 R002 @ 2023-09-13: (commsv3_apicomms:1.2)
 - Agrego a la configuracion las consignas
 
@@ -14,531 +19,158 @@ R001 @ 2023-06-15: (commsv3_apicomms:1.1)
 
 '''
 
-import datetime as dt
-import requests
 from flask_restful import Resource, request, reqparse
-import apidlg_utils
-from apicomms_common import Utils
+from flask import Response 
 
-API_VERSION = 'R001 @ 2023-06-23'
+from baseutils.baseutils import version2int, format_response, tag_generator, tagLog
 
-class ApiDlg(Resource):
+from prot_fwdlgx.fwdlgxR10X import FwdlgxR10X
+from prot_fwdlgx.fwdlgxR11X import FwdlgxR11X
+
+from prot_spxavrda.spxavrdaR11X import SpxavrdaR11X
+from prot_spxavrda.spxavrdaR12X import SpxavrdaR12X
+
+from prot_spxxmega.spxxmegaR11X import SpxxmegaR11X
+from prot_spxxmega.spxxmegaR12X import SpxxmegaR12X
+from prot_spxxmega.spxxmegaR13X import SpxxmegaR13X
+
+from prot_spqavrda.spqavrdaR11X import SpqavrdaR11X
+from prot_spqavrda.spqavrdaR12X import SpqavrdaR12X
+from prot_spqavrda.spqavrdaR13X import SpqavrdaR13X
+
+from prot_dpdavrda.dpdavrdaR10X import DpdavrdaR10X
+
+API_VERSION = 'R003 @ 2025-04-28'
+
+
+#--------------------------------------------------------------------------------------------
+class Apidlg(Resource):
     ''' 
     Clase especializada en atender los dataloggers
+    Recibe como kwargs un diccionario con 2 claves: una es la app flask ppal
+    que es la que tiene el link del log handler, y otro es un diccionario de los
+    servidores de las api auxiliares.
+    Al invocarlo ya genero el TAG para identificar la conexión
     '''
     def __init__(self, **kwargs):
         self.app = kwargs['app']
         self.servers = kwargs['servers']
-        self.debug_unit_id = None
-        self.args = None
-        self.dlgutils = apidlg_utils.dlgutils()
-        self.d_conf = None
-        self.parser = None
-        self.GET_response = ''
-        self.GET_response_status_code = 0
-        self.ID = None
-        self.UID = None
-        self.VER = None
-        self.TYPE = None
-        self.CLASS = None
-        self.url_redis = f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/"
-        self.url_conf = f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/"
-
-    def __update_uid2id__(self, id, uid):
-        '''
-        '''
-        try:
-            r_conf = requests.get(self.url_redis + '/uid2id', params={'uid':self.args['UID']}, timeout=10 )
-        except requests.exceptions.RequestException as err: 
-            self.app.logger.info(f"(500) ApiDLG_ERR001: Redis request exception', Err:{err}")
-            self.app.logger.info(f"(501) ApiDLG_INFO Recoverid Error: UID={self.args['UID']}: RSP_ERROR=[{self.GET_response}]")
-            return
-        #
-        # Esta en la REDIS...
-        if r_conf.status_code == 200:
-            d_rsp = r_conf.json()
-            nid = d_rsp['id']
-            if nid == id:
-                # Redis esta actualizada: Salgo.
-                return
-        # 
-        # En todos los otros casos, intento actualizar Redis y Sql
-        d_conf = {'id':id,'uid':uid}
-        try:
-            r_conf = requests.put(self.url_redis + 'uid2id', json=d_conf, timeout=10 )
-            self.app.logger.info("(502) ApiDLG_INFO uid2id update Redis")
-        except requests.exceptions.RequestException as err: 
-            self.app.logger.info(f"(503) ApiDLG_ERR001: Redis request exception', Err:{err}")
-        #
-        try:
-            r_conf = requests.put(self.url_conf + 'uid2id', json=d_conf, timeout=10 )
-            self.app.logger.info("(504) ApiDLG_INFO uid2id update SQL")
-        except requests.exceptions.RequestException as err: 
-            self.app.logger.info(f"(505) ApiDLG_ERR001: Redis request exception', Err:{err}")        
-        #
- 
-    def __format_response__(self):
-        '''
-        Necesitamos este formateo para que los dlg. puedan parsear la respuesta
-        '''
-        #return f'<html><body><h1>{response}</h1></body></html>'
-        self.GET_response = f'<html>{self.GET_response}</html>'
-
-    def __process_ping__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=PING
-        self.GET_response = 'CLASS=PONG'
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(510) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-
-    def __process_conf_recover__(self):
-        '''
-        '''
-        self.parser.add_argument('UID', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        # Vemos si la redis tiene los datos uid->id
-        try:
-            r_conf = requests.get(self.url_redis + 'uid2id', params={'uid':self.args['UID']}, timeout=10 )
-        except requests.exceptions.RequestException as err: 
-            self.app.logger.info(f"(520) ApiDLG_ERR001: Redis request exception', Err:{err}")
-            self.GET_response = 'CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(521) ApiDLG_INFO Recoverid Error: UID={self.args['UID']}: RSP_ERROR=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-        #
-        # Esta en la REDIS...
-        if r_conf.status_code == 200:
-            d_rsp = r_conf.json()
-            new_id = d_rsp['id']
-            self.app.logger.info(f"(522) ApiDLG_INFO Recoverid (uid,id) in REDIS: NEW_ID={new_id}")
-            self.GET_response = f"CLASS=RECOVER&ID={new_id}"
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(523) ApiDLG_INFO CLASS={self.args['CLASS']},ID={new_id},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-        #
-
-        # No esta en REDIS: buscamos en SQL
-        try:
-            r_conf = requests.get(self.url_conf + 'uid2id', params={'uid':self.args['UID']}, timeout=10 )
-        except requests.exceptions.RequestException as err: 
-            self.app.logger.info(f"(524) ApiDLG_ERR001: Redis request exception', Err:{err}")
-            self.GET_response = 'CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(525) ApiDLG_INFO UID={self.args['UID']}: RSP_ERROR=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-        #
-        # Esta en SQL
-        if r_conf.status_code == 200:
-            d_rsp = r_conf.json()
-            new_id = d_rsp['id']
-            self.app.logger.info(f"(526) ApiDLG_INFO Recoverid (uid,id) in SQL: NEW_ID={new_id}")
-            self.GET_response = f"CLASS=RECOVER&ID={new_id}"
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(527) ApiDLG_INFO CLASS={self.args['CLASS']},ID={new_id},RSP=[{self.GET_response}]")
-            #
-            # Actualizo la redis y mando la respuesta al equipo
-            d_conf = {'id':new_id,'uid':self.args['UID']}
-            try:
-                r_conf = requests.put(self.url_conf + 'uid2id', json=d_conf, timeout=10 )
-            except requests.exceptions.RequestException as err: 
-                self.app.logger.info(f"(528) ApiDLG_ERR001: Redis request exception', Err:{err}")
-            #
-            self.app.logger.info(f"(529) ApiDLG_INFO Recoverid SQL update Redis: ID={new_id}")
-            return self.GET_response, self.GET_response_status_code
-        #
-        # No estaba en Redis ni SQL
-        elif r_conf.status_code == 204:
-            # No hay datos en la SQL tampoco: Debo salir
-            self.app.logger.info(f"(530) ApiDLG_INFO UID2DLGID_ERROR: UID={self.args['UID']}, Err:No Rcd en SQL. Err=({r_conf.status_code}){r_conf.text}")
-            self.GET_response = 'CONFIG=ERROR;NO HAY REGISTRO EN BD' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            return self.GET_response, self.GET_response_status_code
-        #
-        # Error general
-        self.GET_response = 'CONFIG=ERROR' 
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(531) ApiDLG_INFO UID={self.args['UID']}: RSP_ERROR=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-        #
- 
-    def __process_conf_base__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_BASE&UID=42125128300065090117010400000000&HASH=0x11
-        self.parser.add_argument('UID', type=str ,location='args', required=True)
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'BASE' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_ERROR: NO BASE in keys !!. Equipo MAL configurado en el servidor")
-            self.GET_response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            return self.GET_response, self.GET_response_status_code
-    
-        #print(f"DEBUG: self.d_conf={self.d_conf}")
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_BASE&CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(540) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        # Actualizo RECOVER UID2ID
-        self.UID = self.args['UID']
-        self.__update_uid2id__(self.ID, self.UID)
-
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_base(self.d_conf, self.VER, self.TYPE )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(541) ApiDLG_INFO ID={self.args['ID']}, Base: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        #print(f"DEBUG::__get_conf_base__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_BASE&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(542) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_base(self.d_conf, self.VER, self.TYPE)
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(543) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-
-    def __process_conf_ainputs__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_AINPUTS&HASH=0x01
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'AINPUTS' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_WARN: NO AINPUTS in keys !!. Revise configuracion en el servidor")
-
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=ERROR'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(550) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_ainputs(self.d_conf,self.VER, self.TYPE )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(551) ApiDLG_INFO ID={self.args['ID']}, Ainputs: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        #print(f"DEBUG::__get_conf_ainputs__: bd_hash={bd_hash}, dlg_hash={self.args['HASH']}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_AINPUTS&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(552) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_ainputs(self.d_conf,self.VER, self.TYPE )
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(553) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-
-    def __process_conf_counters__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_COUNTERS&HASH=0x86
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'COUNTERS' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_WARN: NO COUNTERS in keys !!. Revise configuracion en el servidor")
-
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(560) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_counters(self.d_conf,self.VER, self.TYPE )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(561) ApiDLG_INFO ID={self.args['ID']}, Counters: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_COUNTERS&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(562) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_counters(self.d_conf,self.VER, self.TYPE )
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(563) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-    
-    def __process_conf_consigna__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_PILOTO&HASH=0x86
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'CONSIGNA' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_WARN: NO CONSIGNA in keys !!. Revise configuracion en el servidor")
-
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(600) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_consigna( self.d_conf,self.VER, self.TYPE )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(601) ApiDLG_INFO ID={self.args['ID']}, D_CONSIGNA={ self.d_conf['CONSIGNA']}")
-            self.app.logger.info(f"(602) ApiDLG_INFO ID={self.args['ID']}, Consigna: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_CONSIGNA&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(603) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_consigna( self.d_conf,self.VER, self.TYPE )
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(604) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-
-    def __process_conf_modbus__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_MODBUS&HASH=0x86
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'MODBUS' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_WARN: NO MODBUS in keys !!. Revise configuracion en el servidor")
-
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(570) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_modbus(self.d_conf,self.VER, self.TYPE )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(571) ApiDLG_INFO ID={self.args['ID']}, Modbus: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_MODBUS&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(572) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_modbus(self.d_conf,self.VER, self.TYPE )
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(573) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-    
-    def __process_conf_piloto__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=CONF_PILOTO&HASH=0x86
-        self.parser.add_argument('HASH', type=str ,location='args', required=True)
-        self.args = self.parser.parse_args()
-        #
-        if 'PILOTO' not in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_WARN: NO PILOTO in keys !!. Revise configuracion en el servidor")
-
-        # Chequeo la configuracion
-        if self.d_conf is None:
-            self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=ERROR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(590) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-
-        # Calculo el hash de la configuracion de la BD.
-        bd_hash = self.dlgutils.get_hash_config_piloto( self.d_conf, self.VER, self.TYPE )
-        if self.ID == self.debug_unit_id:
-            self.app.logger.info(f"(591) ApiDLG_INFO ID={self.args['ID']}, D_PILOTO={ self.d_conf['PILOTO']}")
-            self.app.logger.info(f"(592) ApiDLG_INFO ID={self.args['ID']}, Piloto: BD_hash={bd_hash}, UI_hash={int(self.args['HASH'],16)}")
-        if bd_hash == int(self.args['HASH'],16):
-            self.GET_response = 'CLASS=CONF_PILOTO&CONFIG=OK'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(593) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-            
-        # No coinciden: mando la nueva configuracion
-        self.GET_response = self.dlgutils.get_response_piloto( self.d_conf, self.VER, self.TYPE )
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
- 
-    def __process_data__(self):
-        '''
-        '''
-        # ID=PABLO&TYPE=SPXR3&VER=1.0.0&CLASS=DATA&DATE=230321&TIME=094504&A0=0.00&A1=0.00&A2=0.00&C0=0.000&C1=0.000&bt=12.496
-        # request.args es un dict con todos los pares key:value del url.
-        d_payload = self.dlgutils.convert_dataline2dict(request.args, self.VER, self.TYPE)
+        self.qs = None
+        self.tag = tag_generator()
         
-        if d_payload is None:
-            return 'ERROR:UNKNOWN VERSION',200
-
-        # 1) Guardo los datos
-        r_datos = requests.put(self.url_redis + 'dataline', params={'unit':self.ID,'type':'DLG'}, json=d_payload, timeout=10 )
-        if r_datos.status_code != 200:
-            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-            self.app.logger.error(f"(580) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},ERROR AL GUARDAR DATA EN REDIS. Err=({r_datos.status_code}){r_datos.text}")
-        #
-        # 3) Leo las ordenes
-        r_ordenes = requests.get(self.url_redis + 'ordenes', params={'unit':self.ID }, timeout=10 )
-        d_ordenes = None
-        if r_ordenes.status_code == 200:
-            d_ordenes = r_ordenes.json()
-            ordenes = d_ordenes.get('ordenes','')
-            if self.ID == self.debug_unit_id:
-                self.app.logger.info(f"(581) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID}, D_ORDENES={d_ordenes}")
-        elif r_ordenes.status_code == 204:
-            # Si da error genero un mensaje pero continuo para no trancar al datalogger.
-            if self.ID == self.debug_unit_id:
-                self.app.logger.info(f"(582) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},NO HAY RCD ORDENES")
-            ordenes = ''
-        else:
-            self.app.logger.error(f"(583) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},ERROR AL LEER ORDENES. Err=({r_ordenes.status_code}){r_ordenes.text}")
-            ordenes = ''
-        #
-        # 3.1) Si RESET entonces borro la configuracion
-        if 'RESET' in ordenes:
-            _ = requests.delete(self.url_redis + 'delete', params={'unit':self.ID}, timeout=10 )
-            self.app.logger.info(f"(584) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID}, DELETE REDIS RCD.")
-        #
-        # 3.2) Borro las ordenes
-        _ = requests.delete(self.url_redis + 'ordenes', params={'unit':self.ID}, timeout=10 )
-
-        # 4) Respondo
-        now=dt.datetime.now().strftime('%y%m%d%H%M')
-        self.GET_response = f'CLASS=DATA&CLOCK={now};{ordenes}'
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(585) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-      
     def get(self):
         ''' 
         Procesa los GET de los dataloggers: configuracion y datos.
         '''
-        self.parser = reqparse.RequestParser()
-        self.parser.add_argument('ID', type=str ,location='args', required=True)
-        self.parser.add_argument('TYPE', type=str ,location='args', required=True)
-        self.parser.add_argument('VER', type=str ,location='args', required=True)
-        self.parser.add_argument('CLASS', type=str ,location='args', required=True)
-        try:
-            self.args = self.parser.parse_args()
-        except:
-            self.app.logger.info("(590) ERROR ApiDLG_QS=%(a)s", {'a': request.query_string })
-            self.GET_response = 'ERROR:FAIL TO PARSE'
-            self.GET_response_status_code = 500
-            self.__format_response__()
-            self.app.logger.info(f"(594) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
+        self.qs = request.query_string
+        #self.qs = request.query_string.decode('utf-8')
+        self.app.logger.info("(100) Rcvd Frame: aQS=%(a)s", {'a': self.qs })
 
-        self.ID = self.args['ID']
-        self.VER = self.args['VER']
-        self.TYPE = self.args['TYPE']
-        self.CLASS = self.args['CLASS']
+        parser = reqparse.RequestParser()
+        parser.add_argument('TYPE', type=str ,location='args', required=True)
+        parser.add_argument('VER', type=str ,location='args', required=True)
+        parser.add_argument('HW', type=str ,location='args', required=False)
+        parser.add_argument('ID', type=str ,location='args', required=False)
+        parser.add_argument('CLASS', type=str ,location='args', required=False)
+        args = parser.parse_args()
+        fw_type = args.get('TYPE',None)
+        fw_ver = args.get('VER','0.0.0')
+        dlg_hw = args.get('HW','NONE')
+        dlg_id = args.get('ID','NONE')
+        dlg_frame = args.get('CLASS','NONE')
+        # El chequeo de errores se hace porque parse_args() aborta y retorna None
+        if fw_type is None:
+            raw_response = 'ERROR:FAIL TO PARSE'
+            status_code = 500
+            self.app.logger.info(f"(101) Rcvd Frame ERROR: RSP=[{raw_response}]")
+            response = format_response(raw_response)
+            return response, status_code
 
-        utils=Utils( {'id':self.ID, 'app':self.app, 'servers':self.servers} )
-        
-        # Leo el debugdlgid
-        self.debug_unit_id = utils.read_debug_id()
-        # Logs generales.
-        self.app.logger.info("(590) ApiDLG_INFO DLG_QS=%(a)s", {'a': request.query_string })
-        if self.ID == self.debug_unit_id:
-            self.app.logger.debug("CLASS=%(a)s", {'a': self.args['CLASS'] })
-        
-        # Los PING siempre se responden !!
-        if self.CLASS == 'PING':
-            return self.__process_ping__()
+        ifw_ver = version2int(fw_ver)
 
-        if self.CLASS == 'DATA':
-            return self.__process_data__()
-        
-        if self.CLASS == 'RECOVER':
-            return self.__process_conf_recover__() 
-        
-        # Leo la configuracion porque lo requieren las otras clases
-        self.d_conf = utils.read_configuration((self.ID == self.debug_unit_id)) 
-        if self.d_conf is None :
-            self.GET_response = 'CONFIG=ERROR'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(591) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-        #
-        if 'template' in self.d_conf.keys():
-            self.app.logger.info(f"() ApiDLG_ERROR: TEMPLATE  key !!. Equipo MAL configurado en el servidor")
-            self.GET_response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            return self.GET_response, self.GET_response_status_code
+        #print(f'TAG={self.tag} LB=START TS={timestamp()} ID={id} TYPE={dlg_type} VER={dlg_ver} HW={dlg_hw}')
+        # Hago un selector del tipo y protocolo para seleccionar el objeto que
+        # tiene la representacion mas adecuada
+        # Debemos pasarle la app y los servers para que hagan el log por la app.
+        d_args = {'app':self.app, 
+                  'servers':self.servers, 
+                  'qs':self.qs,
+                  'url_redis': f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/",
+                  'url_conf':f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/" }
 
-        # Analizo los tipos de frames
-        # No acepto frames con ID DEFAULT.
-        if self.ID == 'DEFAULT':
-            self.GET_response = 'CONFIG=ERROR'
-            self.GET_response_status_code = 200
-            self.__format_response__()
-            self.app.logger.info(f"(592) ApiDLG_INFO CLASS={self.args['CLASS']},ID={self.args['ID']},RSP=[{self.GET_response}]")
-            return self.GET_response, self.GET_response_status_code
-        
-        if self.CLASS == 'CONF_BASE':
-            return self.__process_conf_base__()
-        
-        if self.CLASS == 'CONF_AINPUTS':
-            return self.__process_conf_ainputs__()
+        # Log en pantalla y redis para monitorear la aplicacion
+        tagLog( redis_url=d_args.get('url_redis',None), 
+               args={'LABEL':'START', 'TAG':self.tag, 'ID':dlg_id,'TYPE':fw_type,'VER':fw_ver,'HW':dlg_hw, 'CLASS':dlg_frame} 
+               )
 
-        if self.CLASS == 'CONF_COUNTERS':
-            return self.__process_conf_counters__()
+        # El nuevo firmware unificado es solo FWDLGX
+        if ( fw_type == 'FWDLGX'):
+            # [('1.0.2', 59), ('1.0.1', 18), ('1.0.0', 6), ('1.0.3', 6), ('1.0.4', 1)]
+            if ifw_ver == 100:
+                # ('1.0.0', 6), ('1.0.1', 18),('1.0.2', 59),('1.0.3', 6), ('1.0.4', 1)
+                dlg = FwdlgxR10X(d_args)
+            elif ifw_ver == 110:
+                dlg = FwdlgxR11X(d_args)
+            else:
+                # Por defecto usamos la version mas vieja
+                dlg = FwdlgxR10X(d_args)
+        
+        # Versiones anteriores.
+        elif (fw_type == 'SPX_AVRDA') or (fw_type == 'SPXR2'):
+            # SPXR2->('1.1.0', 14)
+            # SPX_AVRDA->('1.2.0', 107)
+            if ifw_ver == 110:
+                dlg = SpxavrdaR11X(d_args)
+            elif ifw_ver == 120:
+                dlg = SpxavrdaR12X(d_args)
+            else:
+                # Por defecto usamos la version mas vieja
+                dlg = SpxavrdaR11X(d_args)
 
-        if self.CLASS == 'CONF_MODBUS':
-            return self.__process_conf_modbus__()
-        
-        if self.CLASS == 'CONF_PILOTO':
-            return self.__process_conf_piloto__()
-        
-        if self.CLASS == 'CONF_CONSIGNA':
-            return self.__process_conf_consigna__()
-        
-        self.GET_response = 'ERROR:UNKNOWN FRAME TYPE'
-        self.GET_response_status_code = 200
-        self.__format_response__()
-        self.app.logger.info(f"(593) ApiDLG_INFO CLASS={self.CLASS},ID={self.ID},RSP=[{self.GET_response}]")
-        return self.GET_response, self.GET_response_status_code
-    
+        elif (fw_type == 'SPX_XMEGA') or (fw_type == 'SPXR3'):
+            # SPXR3->('1.1.0', 96)
+            # SPX_XMEGA->[('1.2.0', 2)]
+            if ifw_ver <= 110:
+                dlg = SpxxmegaR11X(d_args)
+            elif ifw_ver <= 120:
+                dlg = SpxxmegaR12X(d_args)
+            elif ifw_ver <= 130:
+                # 2025-02-28: FWDLGX
+                dlg = SpxxmegaR13X(d_args)
+            else:
+                # Por defecto usamos la version mas vieja
+                dlg = SpxxmegaR11X(d_args)
+
+        elif (fw_type == 'SPQ_AVRDA'):
+            # SPQ_AVRDA->[('1.3.7', 56), ('1.2.6', 6), ('1.3.9', 27), ('1.3.3', 15), ('1.3.6', 13), ('1.3.4', 1)]
+            if ifw_ver <= 110:
+                dlg = SpqavrdaR11X(d_args)
+            elif ifw_ver <= 120:
+                dlg = SpqavrdaR12X(d_args)
+            elif ifw_ver <= 130:
+                dlg = SpqavrdaR13X(d_args)
+            else:
+                # Por defecto usamos la version mas vieja
+                dlg = SpqavrdaR11X(d_args)
+
+        elif (fw_type == 'DPD'):
+            # DPD->[('1.0.7', 1)]
+            dlg = DpdavrdaR10X(d_args)
+
+        else:
+
+            # Por defecto usamos la version mas vieja
+             dlg = FwdlgxR10X(d_args)
+
+        # Proceso el frame y envio la respuesta
+        (raw_response, status_code) = dlg.process_frame()
+        if raw_response is not None:
+            response = format_response(raw_response)
+
+        tagLog( redis_url=d_args.get('url_redis',None), 
+               args={'LABEL':'STOP', 'TAG':self.tag } 
+               )
+        if raw_response is not None:
+            return response, status_code
+        else:
+            return Response(status=204)

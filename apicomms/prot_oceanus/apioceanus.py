@@ -1,4 +1,4 @@
-#!/home/pablo/Spymovil/python/proyectos/APICOMMSV3/venv/bin/python
+#!/home/pablo/Spymovil/python/proyectos/APICOMMS/venv/bin/python
 '''
 API de comunicaciones SPCOMMS para las estaciones ambientales OCEANUS.
 
