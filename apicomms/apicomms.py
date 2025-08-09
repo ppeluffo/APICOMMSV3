@@ -34,13 +34,18 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-TESTING = False
+
+
+TESTING = True
+
+DEBUGFLAG = False
 
 if TESTING:
     APIREDIS_HOST = '127.0.0.1'
     APIREDIS_PORT = '5100'
     APICONF_HOST = '127.0.0.1'
     APICONF_PORT = '5200'
+    DEBUGFLAG = True
 
 servers = {
    'APIREDIS_HOST': APIREDIS_HOST,
@@ -102,7 +107,7 @@ class Test(Resource):
 
 api.add_resource( ApiPlc, '/apiplc', resource_class_kwargs={ 'app': app, 'servers':servers })
 api.add_resource( ApiOceanus, '/apioceanus', resource_class_kwargs={ 'app': app, 'servers':servers })
-api.add_resource( Apidlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers })
+api.add_resource( Apidlg, '/apidlg', resource_class_kwargs={ 'app': app, 'servers':servers, 'debugFlag': DEBUGFLAG })
 api.add_resource( Help,   '/apicomms/help')
 api.add_resource( Ping,   '/apicomms/ping')
 api.add_resource( Test,   '/apicomms/test')

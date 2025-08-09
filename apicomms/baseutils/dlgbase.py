@@ -758,13 +758,13 @@ class Dlgbase:
         if args['CLASS'] == 'PING':
             return self.process_frame_ping()       
         
-        if  args['CLASS'] == 'CONF_BASE':
+        if args['CLASS'] == 'CONF_BASE':
             return self.process_frame_base()
         
-        if  args['CLASS'] == 'CONF_AINPUTS':
+        if args['CLASS'] == 'CONF_AINPUTS':
             return self.process_frame_ainputs()
         
-        if  args['CLASS'] == 'CONF_COUNTERS':
+        if args['CLASS'] == 'CONF_COUNTERS':
             return self.process_frame_counters()
         
         if args['CLASS'] == 'CONF_MODBUS':
@@ -783,7 +783,7 @@ class Dlgbase:
             return self.process_frame_configAll()
 
         if args['CLASS'] == 'DATANR':
-            return self.process_frame_data(response=False)   
+            return self.process_frame_dataBulk()   
         
         
         # Catch all errors

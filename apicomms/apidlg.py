@@ -55,6 +55,7 @@ class Apidlg(Resource):
     def __init__(self, **kwargs):
         self.app = kwargs['app']
         self.servers = kwargs['servers']
+        self.debugflag = kwargs['debugFlag']
         self.qs = None
         self.tag = tag_generator()
         
@@ -94,6 +95,7 @@ class Apidlg(Resource):
         # Debemos pasarle la app y los servers para que hagan el log por la app.
         d_args = {'app':self.app, 
                   'servers':self.servers, 
+                  'debugFlag': self.debugflag,
                   'qs':self.qs,
                   'url_redis': f"http://{self.servers['APIREDIS_HOST']}:{self.servers['APIREDIS_PORT']}/apiredis/",
                   'url_conf':f"http://{self.servers['APICONF_HOST']}:{self.servers['APICONF_PORT']}/apiconf/" }
