@@ -4,6 +4,7 @@ import datetime as dt
 from flask_restful import reqparse, request
 from baseutils.baseutils import read_configuration, update_uid2id, read_debug_id, update_comms_conf, convert_dataline2dict  
 from baseutils.baseutils import convert_line2dict
+from baseutils.baseutils import str2int, u_hash
 import requests
 from prot_fwdlgx.fwdlgxR10X import FwdlgxR10X
 
@@ -20,6 +21,127 @@ class FwdlgxR11X(FwdlgxR10X):
     en la clase padre de todas.
     Si el método no tienen particularidades, lo refiero por herencia
     '''
+
+    ############################################################################################
+    # FLOWCONTROL
+
+    def get_flowcontrol_hash_from_config(self, d_conf=None):
+        '''
+        Calculo el hash para todas las versiones
+        '''
+        xhash = 0
+        #print(f'DEBUG D_CONF_FLOWCONTROL={d_conf.get('FLOWCONTROL',{})}')
+        enable = d_conf.get('FLOWCONTROL',{}).get('ENABLE','FALSE')
+        hash_str = f'[{enable.upper()}]'
+        xhash = u_hash(xhash, hash_str)
+        print(f'DEBUG HASH FLOWCONTROL: hash_str={hash_str}{xhash}')
+        #
+        for channel in range(14):
+            slot_name = f'SLOT{channel}'
+            s_dow = d_conf.get('FLOWCONTROL',{}).get(slot_name,{}).get('DOW','--')
+            s_dow = s_dow.upper()
+            if s_dow == 'LU':
+                dow = 1;
+            elif s_dow == 'MA':
+                dow = 2
+            elif s_dow == 'MI':
+                dow = 3
+            elif s_dow == 'JU':
+                dow = 4
+            elif s_dow == 'VI':
+                dow = 5
+            elif s_dow == 'SA':
+                dow = 6
+            elif s_dow == 'DO':
+                dow = 7
+            else:
+                dow = 8
+
+            ptime = str2int( d_conf.get('FLOWCONTROL',{}).get(slot_name,{}).get('TIME','0000') )
+            action = d_conf.get('FLOWCONTROL',{}).get(slot_name,{}).get('ACTION','CLOSE')
+
+            hash_str = f'[SLOT{channel:02d}:{dow:02d},{ptime:04d},{action.upper()}]'
+            xhash = u_hash(xhash, hash_str)
+            print(f'DEBUG HASH FLOWCONTROL: hash_str={hash_str}{xhash}')
+        # 
+        return xhash
+
+    def get_response_flowcontrol(self, d_conf=None):
+        '''
+        Armo la respuesta para todas las versiones
+        '''
+        print(f'DEBUG D_CONF_FLOWCONTROL={d_conf.get('FLOWCONTROL',{})}')
+        enable = d_conf.get('FLOWCONTROL',{}).get('ENABLE','FALSE')
+        response = f'CLASS=CONF_FLOWC&ENABLE={enable}'
+        #
+        for channel in range(14):
+            slot_name = f'SLOT{channel}'
+            s_dow = d_conf.get('FLOWCONTROL',{}).get(slot_name,{}).get('DOW','--')
+            s_dow = s_dow.upper()
+            if s_dow == 'LU':
+                dow = 1;
+            elif s_dow == 'MA':
+                dow = 2
+            elif s_dow == 'MI':
+                dow = 3
+            elif s_dow == 'JU':
+                dow = 4
+            elif s_dow == 'VI':
+                dow = 5
+            elif s_dow == 'SA':
+                dow = 6
+            elif s_dow == 'DO':
+                dow = 7
+            else:
+                dow = 8
+
+            ptime = str2int( d_conf.get('FLOWCONTROL',{}).get(slot_name,{}).get('TIME','0000') )
+            action = d_conf.get('FLOWCONTROL',{}).get(slot_name,{}).get('ACTION','CLOSE')
+            response += f'&S{channel:02d}:{s_dow},{ptime:04d},{action.upper()}'
+        #
+        return response
+
+    def process_frame_flowcontrol(self):
+        '''
+        El HASH NO lo uso mas.
+        ERRORES: 9XX
+        '''
+        # ID=868191051472973&HW=SPQ_AVRDA_R2&TYPE=FWDLGX&VER=1.1.0&CLASS=CONF_FLOWCONTROL&HASH=0x%02X
+        app = self.d_args.get('app',None)
+
+        parser = reqparse.RequestParser()
+        parser.add_argument('ID', type=str ,location='args', required=True)
+        args = parser.parse_args()
+        unit_id = args.get('ID',None)
+        # El chequeo de errores se hace porque parse_args() aborta y retorna None
+        if unit_id is None:
+            app.logger.info("(900) process_frame_flowcontrol ERROR: No unit_id")
+            response = 'ERROR:NO ID'
+            status_code = 500
+            app.logger.info(f"(901) process_frame_flowcontrol ERROR: RSP=[{response}]")
+            return response, status_code
+        
+        # Leo la configuracion del datalogger
+        d_conf = read_configuration(self.d_args, unit_id)
+        # Chequeo la configuracion
+        if d_conf is None:
+            response = 'CLASS=CONF_FLOWCONTROL&CONFIG=ERROR' 
+            status_code = 200
+            app.logger.info(f"(903) process_frame_flowcontrol INFO: ID={unit_id},RSP=[{response}]")
+            return response, status_code
+        
+        if 'FLOWCONTROL' not in d_conf.keys():
+            app.logger.info("(902) process_frame_flowcontrol ERROR: NO FLOWCONTROL in keys !!. Default config.")
+            #response = 'ERROR: ID MAL CONFIGURADO EN SERVIDOR' 
+            #status_code = 200
+            #return response, status_code
+        
+        debugid = read_debug_id(self.d_args)
+
+        response = self.get_response_flowcontrol(d_conf)
+        status_code = 200
+        app.logger.info(f"(906) process_frame_flowcontrol INFO: ID={unit_id},RSP=[{response}]")
+        return response, status_code
 
     ############################################################################################
     # CONFIG ALL
@@ -55,6 +177,7 @@ class FwdlgxR11X(FwdlgxR10X):
         parser.add_argument('CH', type=str ,location='args', required=True)
         parser.add_argument('MH', type=str ,location='args', required=True)
         parser.add_argument('PH', type=str ,location='args', required=True)
+        parser.add_argument('FH', type=str ,location='args', required=True)
 
         args = parser.parse_args()
         dlgid = args.get('ID',None)
@@ -116,40 +239,64 @@ class FwdlgxR11X(FwdlgxR10X):
         response = 'CLASS=CONF_ALL'
         new_conf = False
         # Calculo el hash de las configuracion de la BD.
+
+        # BASE
         bd_Bhash = self.get_base_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Bhash={bd_Bhash}, UI_Bhash={int(args['BH'],16)}")
-        if bd_Bhash != int(args['BH'],16):
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Bhash={bd_Bhash}, UI_Bhash={int(args.get('BH','-1'),16)}")
+        if bd_Bhash != int(args.get('BH','-1'),16):
             response += '&BASE'
             new_conf = True
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: Config BASE")
 
+        # ANALOG
         bd_Ahash = self.get_ainputs_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Ahash={bd_Ahash}, UI_Ahash={int(args['AH'],16)}")
-        if bd_Ahash != int(args['AH'],16):
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Ahash={bd_Ahash}, UI_Ahash={int(args.get('AH','-1'),16)}")
+        if bd_Ahash != int(args.get('AH','-1'),16):
             response += '&AINPUTS'
             new_conf = True
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: Config ANALOG")
 
+        # COUNTER
         bd_Chash = self.get_counters_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Chash={bd_Chash}, UI_Chash={int(args['CH'],16)}")
-        if bd_Chash != int(args['CH'],16):
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Chash={bd_Chash}, UI_Chash={int(args.get('CH','-1'),16)}")
+        if bd_Chash != int(args.get('CH','-1'),16):
             response += '&COUNTER'
             new_conf = True
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: Config COUNTER")
 
+
+        # MODBUS
         bd_Mhash = self.get_modbus_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Mhash={bd_Mhash}, UI_Mhash={int(args['MH'],16)}")
-        if bd_Mhash != int(args['MH'],16):
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Mhash={bd_Mhash}, UI_Mhash={int(args.get('MH','-1'),16)}")
+        if bd_Mhash != int(args.get('MH','-1'),16):
             response += '&MODBUS'
             new_conf = True
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: Config MODBUS")
 
+
+        # PRESION
         bd_Phash = self.get_consigna_hash_from_config(d_conf)
         if dlgid == debugid:
-            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Phash={bd_Phash}, UI_Phash={int(args['PH'],16)}")
-        if bd_Phash != int(args['PH'],16):
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Phash={bd_Phash}, UI_Phash={int(args.get('PH','-1'),16)}")
+        if bd_Phash != int(args.get('PH','-1'),16):
             response += '&PRESION'
             new_conf = True
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: Config PRESION")
+
+
+        # FLOWCONTROL
+        bd_Fhash = self.get_flowcontrol_hash_from_config(d_conf)
+        if dlgid == debugid:
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Fhash={bd_Fhash}, UI_Fhash={int(args.get('FH','-1'),16)}")
+        if bd_Fhash != int(args.get('FH','-1'),16):
+            response += '&FLOWC'
+            new_conf = True
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: BD_Fhash={bd_Fhash}, UI_Fhash={int(args.get('FH','-1'),16)}")
+            app.logger.info(f"(504) process_frame_base: ID={dlgid}: Config FLOWC")
 
         if not new_conf:
             response += '&CONFIG=OK'

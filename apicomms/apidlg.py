@@ -2,6 +2,8 @@
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
+R004 @ 2025-08-09:
+
 R003 @ 2025-04-28:
 - Agrego un TAG que me indique el timestamp de lo que demoran las transacciones
   y si terminan. 
@@ -79,6 +81,7 @@ class Apidlg(Resource):
         dlg_hw = args.get('HW','NONE')
         dlg_id = args.get('ID','NONE')
         dlg_frame = args.get('CLASS','NONE')
+        
         # El chequeo de errores se hace porque parse_args() aborta y retorna None
         if fw_type is None:
             raw_response = 'ERROR:FAIL TO PARSE'
@@ -157,6 +160,7 @@ class Apidlg(Resource):
 
         elif (fw_type == 'DPD'):
             # DPD->[('1.0.7', 1)]
+            #print(f'DEBUG DPD d_args={d_args}')
             dlg = DpdavrdaR10X(d_args)
 
         else:

@@ -785,6 +785,8 @@ class Dlgbase:
         if args['CLASS'] == 'DATANR':
             return self.process_frame_dataBulk()   
         
+        if args['CLASS'] == 'CONF_FLOWC':
+            return self.process_frame_flowcontrol()
         
         # Catch all errors
         response = 'FAIL'

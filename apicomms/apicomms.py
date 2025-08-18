@@ -2,6 +2,19 @@
 '''
 API de comunicaciones SPCOMMS para los dataloggers y plc.
 -----------------------------------------------------------------------------
+R004 @ 2025-08-09:
+- Separamos en modulos (packages) para c/hardware y protocolo y ordenamos
+  el código.
+- El último protocolo con el que seguimos trabajando es FWDLGX
+  FwdlgxR11X:
+  - Agregamos 2 nuevos frames: config_all(), data_bulk()
+  - Agregamos el manejo de valvulas de apertura/cierre ANEP (flowcontrol)
+  - Reset a Default:
+    * Eliminamos del datalogger el envio del DLGID. Este pasa a ser un concepto
+      de configuracion en el servidor.
+    * Eliminamos los frames de RECONFIG
+
+-----------------------------------------------------------------------------
 R001 @ 2023-06-15: (commsv3_apicomms:1.1)
 - Se modifica el procesamiento de frames de modo que al procesar uno de DATA sea
   como los PING, no se lee la configuracion ya que no se necesita y genera carga
@@ -25,7 +38,7 @@ from apiplc import ApiPlc
 app = Flask(__name__)
 api = Api(app)
  
-API_VERSION = 'R003 @ 2025-04-28'
+API_VERSION = 'R004 @ 2025-08-18'
 
 APIREDIS_HOST = os.environ.get('APIREDIS_HOST', 'apiredis')
 APIREDIS_PORT = os.environ.get('APIREDIS_PORT', '5100')
@@ -34,9 +47,7 @@ APICONF_PORT = os.environ.get('APICONF_PORT', '5200')
 
 # SOLO EN TESTING ALONE !!!
 
-
-
-TESTING = True
+TESTING = False
 
 DEBUGFLAG = False
 

@@ -9,5 +9,4 @@ class DpdavrdaR10X(Dpdavrda):
         '''
         '''
         self.d_args = d_args
-        #print("DPD S1")
-        super().__init__()
+        super().__init__(d_args)
