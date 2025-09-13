@@ -48,7 +48,7 @@ services:
     build:
       context: ./apidatos
       dockerfile: Dockerfile
-    image: spymovil/commsv3_apidatos:20250818
+    image: spymovil/commsv3_apidatos:20250913
     ports:
       - 5300:5300
     logging:
@@ -114,7 +114,7 @@ services:
     build:
       context: ./process
       dockerfile: Dockerfile
-    image: spymovil/commsv3_process:20250818
+    image: spymovil/commsv3_process:20250913
     restart: always
     logging:
       driver: "syslog"

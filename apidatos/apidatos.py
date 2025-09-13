@@ -107,13 +107,13 @@ class BD_SQL_BASE:
         #
         return {'res':True,'rp':rp }
 
-    def insert_user(self, user_id):
+    def insert_user(self, user_id, label):
         '''
         Inserta un nuevo usuario en la tabla usuarios
         Retorna True/False
         '''
         dnow = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        sql = f"INSERT INTO usuarios ( user_id, fecha_ultimo_acceso, data_ptr ) VALUES ('{user_id}', '{dnow}','0') ON CONFLICT DO NOTHING" 
+        sql = f"INSERT INTO usuarios ( user_id, fecha_ultimo_acceso, data_ptr, label ) VALUES ('{user_id}', '{dnow}','0', '{label}') ON CONFLICT DO NOTHING" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
             app.logger.info( '(206) ApiDATOS_ERR006: insert_user FAIL')
@@ -123,7 +123,7 @@ class BD_SQL_BASE:
         '''
         Lee todos los datos del usuario
         '''
-        sql = f"SELECT fecha_ultimo_acceso, data_ptr FROM usuarios WHERE user_id = '{user_id}'" 
+        sql = f"SELECT fecha_ultimo_acceso, data_ptr, label FROM usuarios WHERE user_id = '{user_id}'" 
         d_res = self.exec_sql(sql)
         if not d_res.get('res',False):
             app.logger.info( '(207) ApiDATOS_ERR007: select_user FAIL')
@@ -206,13 +206,20 @@ class Usuarios(Resource):
         '''
         Implementacion del CREATE USERS
         '''
+        # Obtengo el label del usuario desde el get
+        parser = reqparse.RequestParser()
+        parser.add_argument('label',type=str,location='args',required=True)
+        args=parser.parse_args()
+        label = args['label']
+        # Si no existe el label, error
+        if label is None or label == '':
+            return {'rsp':'ERROR', 'msg':'Falta label'},400
         # Creamos un id de 20 caracteres aleatorios.
         random.seed(dt.datetime.now().timestamp())
         user_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=20))
-        #
         # Creo una entrada en la BD
         bdsql = BD_SQL_BASE()
-        d_res = bdsql.insert_user(user_id)
+        d_res = bdsql.insert_user(user_id, label)
         if not d_res.get('res',False):
             bdsql.close()
             return {'rsp':'ERROR', 'msg':'Error en pgsql'},500
@@ -242,9 +249,10 @@ class Usuarios(Resource):
         # La fecha es un datetime !!!
         fechaUltimoAcceso = row[0].strftime("%m/%d/%Y, %H:%M:%S")
         data_ptr = row[1]
+        label = row[2]
         bdsql.close()
-        return {'user':args['user'],'fechaUltimoAcceso':fechaUltimoAcceso,'data_ptr':data_ptr }, 200
-    
+        return {'user':args['user'],'fechaUltimoAcceso':fechaUltimoAcceso,'data_ptr':data_ptr, 'label':label }, 200
+
     def delete(self):
         '''
         Borra el usuario de la BD

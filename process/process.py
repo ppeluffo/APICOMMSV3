@@ -311,11 +311,11 @@ def housekeeping_online():
     for t in cursor:
         l_dates.append(t[1])
         l_idx.append(t[2])
-    # Solo considero aquellos que hayan tenido actividad en los ultimos 3 dias ( 72 horas)
+    # Solo considero aquellos que hayan tenido actividad en los ultimos 1 dias ( 24 horas)
     for i,date in enumerate(l_dates):
         deltatime = (now - date).total_seconds()/3600
         #print(f"{date},delta={deltatime}")
-        if deltatime < 72:
+        if deltatime < 24:
             idx.append(l_idx[i])
     #
     #print(f"DEBUG PROCESS: L_IDX={l_idx},IDX={idx}")
