@@ -97,7 +97,7 @@ services:
     build:
       context: ./apiredis
       dockerfile: Dockerfile
-    image: spymovil/commsv3_apiredis:test
+    image: spymovil/commsv3_apiredis:20260428
     # ports:
     #   - 5100:5100
     logging:

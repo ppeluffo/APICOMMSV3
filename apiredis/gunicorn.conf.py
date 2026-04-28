@@ -23,7 +23,7 @@ max_requests = 2000
 max_requests_jitter = 200
 
 # Carga previa (ahorra memoria por COW; OK porque Redis se inicializa lazy)
-preload_app = True
+preload_app = False
 
 # Logging
 errorlog = "-"              # stderr
