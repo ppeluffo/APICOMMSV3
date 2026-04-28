@@ -13,6 +13,7 @@ COPY . .
 RUN ls -laR
 COPY entrypoint.sh .
 RUN chmod 777 /apicomms/*
+# RUN pip install gunicorn[gthread]
 ENTRYPOINT ["sh", "entrypoint.sh"]
 
 EXPOSE 5000

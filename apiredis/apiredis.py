@@ -82,12 +82,16 @@ WARN R006: No dataline rcd
 
 import os
 import datetime as dt
-import redis
 import json
 import pickle
 import logging
-from flask import Flask, request, jsonify
+
+import threading
+from flask import Flask, request, jsonify, current_app
 from flask_restful import Resource, Api, reqparse
+
+import redis
+from redis import Redis, ConnectionPool
 
 app = Flask(__name__)
 api = Api(app)
@@ -96,7 +100,61 @@ BDREDIS_HOST = os.environ.get('BDREDIS_HOST','redis')
 BDREDIS_PORT = os.environ.get('BDREDIS_PORT','6379')
 BDREDIS_DB = os.environ.get('BDREDIS_DB','0')
 
+REDIS_MAX_CONN         = int(os.environ.get('REDIS_MAX_CONN', '100'))
+REDIS_CONNECT_TIMEOUT  = float(os.environ.get('REDIS_CONNECT_TIMEOUT', '1.0'))
+REDIS_SOCKET_TIMEOUT   = float(os.environ.get('REDIS_SOCKET_TIMEOUT', '2.0'))
+REDIS_HEALTHCHECK_SEC  = int(os.environ.get('REDIS_HEALTHCHECK_SEC', '30'))
+
 API_VERSION = 'R001 @ 2023-06-14'
+
+__redis_pool = None
+__redis_client = None
+__redis_lock = threading.Lock()
+
+
+def get_redis_client() -> Redis:
+    """
+    Devuelve un cliente Redis con pool compartido por proceso.
+    Se inicializa la primera vez que se llama (thread-safe).
+    No depende de before_first_request ni before_serving.
+    """
+    global __redis_pool, __redis_client
+    if __redis_client is not None:
+        return __redis_client
+    with __redis_lock:
+        if __redis_client is None:
+            __redis_pool = ConnectionPool(
+                host=BDREDIS_HOST,
+                port=BDREDIS_PORT,
+                db=BDREDIS_DB,
+                max_connections=REDIS_MAX_CONN,
+                socket_connect_timeout=REDIS_CONNECT_TIMEOUT,
+                socket_timeout=REDIS_SOCKET_TIMEOUT,
+                health_check_interval=REDIS_HEALTHCHECK_SEC,
+                retry_on_timeout=True,
+                # decode_responses=False  # mantené False si usás pickle
+            )
+            __redis_client = Redis(connection_pool=__redis_pool)
+    return __redis_client
+
+# helper corto compatible con tu código anterior
+def r() -> Redis:
+    return get_redis_client()
+
+# 2) Reemplazar por cierre al terminar el proceso:
+import atexit
+
+def _close_redis():
+    try:
+        global __redis_client, __redis_pool
+        if __redis_client:
+            __redis_client.close()
+        if __redis_pool:
+            __redis_pool.disconnect()
+    except Exception:
+        pass
+
+atexit.register(_close_redis)
 
 class Ping(Resource):
     '''
@@ -104,9 +162,8 @@ class Ping(Resource):
     '''
     def get(self):
 
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB, socket_connect_timeout=1)
         try:
-            rh.ping()
+            r().ping()
             d_rsp = {'rsp':'OK','version':API_VERSION,'REDIS_HOST':BDREDIS_HOST,'REDIS_PORT':BDREDIS_PORT }
             return d_rsp,200
         except redis.ConnectionError:
@@ -128,10 +185,8 @@ class DeleteRcd(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            _=rh.delete(args['unit'])
+            _ = r().delete(args['unit'])
         except redis.ConnectionError:
             app.logger.info( f'(002) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR','msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -155,10 +210,9 @@ class Config(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            pk_config = rh.hget( args['unit'], 'PKCONFIG')
+            pk_config = r().hget( args['unit'], 'PKCONFIG')
         except redis.ConnectionError:
             app.logger.info( f'(003) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -201,10 +255,9 @@ class Config(Resource):
         except Exception:
             d_rsp = {'rsp':'ERROR', 'msg':'pickle dumps error'}
             return d_rsp, 409
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            _ = rh.hset( args['unit'],'PKCONFIG', pk_config)
+            _ = r().hset( args['unit'],'PKCONFIG', pk_config)
         except redis.ConnectionError:
             app.logger.info( f'(005) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -224,9 +277,9 @@ class DebugId(Resource):
             {'debugId': 'PLCTEST'}
 
         '''
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            debug_id = rh.hget('SPCOMMS', 'DEBUG_ID')
+            debug_id = r().hget('SPCOMMS', 'DEBUG_ID')
         except redis.ConnectionError:
             app.logger.info( f'(006) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -262,9 +315,9 @@ class DebugId(Resource):
             return d_rsp, 406
         #
         debugid = d_params.get('debugid','UNKNOWN')
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            _ = rh.hset('SPCOMMS', 'DEBUG_ID', debugid )
+            _ = r().hset('SPCOMMS', 'DEBUG_ID', debugid )
         except redis.ConnectionError:
             app.logger.info( f'(009) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -287,10 +340,9 @@ class Uid2id(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('uid',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            unit_id = rh.hget('RECOVERIDS', args['uid'] )
+            unit_id = r().hget('RECOVERIDS', args['uid'] )
         except redis.ConnectionError:
             app.logger.info( f'(027) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -333,9 +385,8 @@ class Uid2id(Resource):
             return {'Err':'ID no puede ser DEFAULT'}, 406
     
         #app.logger.debug(f'Ordenes/Put DBUG: ordenes={ordenes}')
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            _ = rh.hset( 'RECOVERIDS', d_params['uid'], d_params['id'] )
+            _ = r().hset( 'RECOVERIDS', d_params['uid'], d_params['id'] )
         except redis.ConnectionError:
             app.logger.info( f'(031) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -360,9 +411,8 @@ class Ordenes(Resource):
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
         #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            pk_ordenes = rh.hget( args['unit'], 'PKORDENES' )
+            pk_ordenes = r().hget( args['unit'], 'PKORDENES' )
         except redis.ConnectionError:
             app.logger.info( f'(010) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -411,7 +461,7 @@ class Ordenes(Resource):
             return d_rsp, 406
         
         ordenes = d_params.get('ordenes','')
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
             pk_ordenes = pickle.dumps(ordenes)
         except Exception:
@@ -419,7 +469,7 @@ class Ordenes(Resource):
             return d_rsp, 409
         #
         try:
-            _ = rh.hset( args['unit'], 'PKORDENES', pk_ordenes )
+            _ = r().hset( args['unit'], 'PKORDENES', pk_ordenes )
         except redis.ConnectionError:
             app.logger.info( f'(012) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -443,9 +493,8 @@ class Ordenes(Resource):
         args=parser.parse_args()
         #
         #app.logger.debug(f'Ordenes/Put DBUG: ordenes={ordenes}')
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            _ = rh.hdel( args['unit'], 'PKORDENES' )
+            _ = r().hdel( args['unit'], 'PKORDENES' )
         except redis.ConnectionError:
             app.logger.info( f'(013) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -468,9 +517,8 @@ class OrdenesAtvise(Resource):
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
     
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            pk_atvise = rh.hget( args['unit'],'PKATVISE')
+            pk_atvise = r().hget( args['unit'],'PKATVISE')
         except redis.ConnectionError:
             app.logger.info( f'(014) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -513,7 +561,7 @@ class OrdenesAtvise(Resource):
             return {'rsp':'ERROR','msg':'ApiREDIS_ERR004: No ordenes atvise in request_json_data'}, 406
         #
         ordenes_atvise = d_params.get('ordenes_atvise','')
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
             pk_ordenes_atvise = pickle.dumps(ordenes_atvise)
         except Exception:
@@ -521,7 +569,7 @@ class OrdenesAtvise(Resource):
             return d_rsp, 409
         #
         try: 
-            _ = rh.hset( args['unit'],'PKATVISE', pk_ordenes_atvise)
+            _ = r().hset( args['unit'],'PKATVISE', pk_ordenes_atvise)
         except redis.ConnectionError:
             app.logger.info( f'(016) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -540,10 +588,9 @@ class OrdenesAtvise(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            _ = rh.hdel( args['unit'],'PKATVISE')
+            _ = r().hdel( args['unit'],'PKATVISE')
         except redis.ConnectionError:
             app.logger.info( f'(017) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -566,10 +613,9 @@ class DataLine(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('unit',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            pk_dline = rh.hget( args['unit'], 'PKLINE')
+            pk_dline = r().hget( args['unit'], 'PKLINE')
         except redis.ConnectionError:
             app.logger.info( f'(018) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -611,12 +657,10 @@ class DataLine(Resource):
         if not isinstance(d_params, dict):
             d_rsp = {'rsp':'ERROR', 'msg':'No es una instancia de dict.'}
             return d_rsp, 406  
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
             # Actualizamos el registro PKLINE
             pk_line = pickle.dumps(d_params) # Es un bytearray
-            _ = rh.hset( args['unit'],'PKLINE', pk_line )
+            _ = r().hset( args['unit'],'PKLINE', pk_line )
         except redis.ConnectionError:
             app.logger.info( f'(019) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -625,7 +669,7 @@ class DataLine(Resource):
         # Actualizamos la tabla con los timestamps en cada linea nueva que insertamos.
         timestamp = dt.datetime.now()
         ptimestamp = pickle.dumps(timestamp)
-        _ = rh.hset('TIMESTAMP', args['unit'], ptimestamp )
+        _ = r().hset('TIMESTAMP', args['unit'], ptimestamp )
         #
         # Encolamos en RXDATA_QUEUE
         d_persistent = {'TYPE':args['type'], 'ID':args['unit'], 'D_LINE':d_params}
@@ -636,7 +680,7 @@ class DataLine(Resource):
             return d_rsp, 409
         #
         try:
-            _ = rh.rpush( 'RXDATA_QUEUE', pk_d_persistent)
+            _ = r().rpush( 'RXDATA_QUEUE', pk_d_persistent)
         except redis.ConnectionError:
             app.logger.info( f'(020) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -658,10 +702,9 @@ class QueueLength(Resource):
         parser = reqparse.RequestParser()
         parser.add_argument('qname',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            qlength = rh.llen(args['qname'])
+            qlength = r().llen(args['qname'])
         except redis.ConnectionError:
             app.logger.info( f'(021) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -688,11 +731,10 @@ class QueueItems(Resource):
         parser.add_argument('qname',type=str,location='args',required=True)
         parser.add_argument('count',type=str,location='args',required=True)
         args=parser.parse_args()
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
             l_pkdatos = []
-            l_pkdatos = rh.lpop(args['qname'], args['count'])
+            l_pkdatos = r().lpop(args['qname'], args['count'])
         except redis.ConnectionError:
             app.logger.info( f'(023) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -740,11 +782,9 @@ class LogQueuePush(Resource):
         d_params = json.loads(jd_params)
         #print(f'DEBUG_REDIS={d_params}')
         payload = d_params['log_data']
-        #print(f'DEBUG_PAYLOAD={payload}')
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
 
         try:
-            _ = rh.rpush( queue_name, payload)
+            _ = r().rpush( queue_name, payload)
         except redis.ConnectionError:
             app.logger.info( f'(020) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -764,10 +804,9 @@ class LogQueueLength(Resource):
         json.loads(req.json())
         {'qname': 'RXDATA_QUEUE', 'length': 595}
         '''
-        #
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
+
         try:
-            qlength = rh.llen('LOG_QUEUE')
+            qlength = r().llen('LOG_QUEUE')
         except redis.ConnectionError:
             app.logger.info( f'(021) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -795,10 +834,9 @@ class LogQueuePop(Resource):
         args=parser.parse_args()
         #
         nro_regs = args.get('count',0)
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
             l_datos = []
-            l_datos = rh.lpop('LOG_QUEUE', nro_regs)
+            l_datos = r().lpop('LOG_QUEUE', nro_regs)
         except redis.ConnectionError:
             app.logger.info( f'(023) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }
@@ -819,9 +857,8 @@ class LogQueuePop(Resource):
 class Stats(Resource):
 
     def get(self):
-        rh = redis.Redis( BDREDIS_HOST, BDREDIS_PORT, BDREDIS_DB)
         try:
-            d_res = rh.hgetall( 'TIMESTAMP' )
+            d_res = r().hgetall( 'TIMESTAMP' )
         except redis.ConnectionError:
             app.logger.info( f'(025) ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}')
             d_rsp = {'rsp':'ERROR', 'msg':f'ApiREDIS_ERR001: Redis not connected, HOST:{BDREDIS_HOST}:{BDREDIS_PORT}' }

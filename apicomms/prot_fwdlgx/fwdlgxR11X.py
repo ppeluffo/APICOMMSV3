@@ -70,7 +70,7 @@ class FwdlgxR11X(FwdlgxR10X):
         '''
         Armo la respuesta para todas las versiones
         '''
-        print(f'DEBUG D_CONF_FLOWCONTROL={d_conf.get('FLOWCONTROL',{})}')
+        print(f"DEBUG D_CONF_FLOWCONTROL={d_conf.get('FLOWCONTROL',{})}")
         enable = d_conf.get('FLOWCONTROL',{}).get('ENABLE','FALSE')
         response = f'CLASS=CONF_FLOWC&ENABLE={enable}'
         #
